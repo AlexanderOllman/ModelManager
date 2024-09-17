@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mt-4">Models</h2>
+<div id="models-container" class="row">
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            const popup = document.createElement('div');
+            popup.textContent = 'URL copied!';
+            popup.style.position = 'fixed';
+            popup.style.padding = '10px';
+            popup.style.background = 'rgba(0,0,0,0.8)';
+            popup.style.color = 'white';
+            popup.style.borderRadius = '5px';
+            popup.style.zIndex = '1000';
+            document.body.appendChild(popup);
+
+            const rect = event.target.getBoundingClientRect();
+            popup.style.top = `${rect.top - 40}px`;
+            popup.style.left = `${rect.left}px`;
+
+            setTimeout(() => {
+                document.body.removeChild(popup);
+            }, 2000);
+        });
+    }
+
+    fetch('/api/isvc')
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('models-container');
+            container.innerHTML = '';
+            data.items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'col-md-3 mb-4';
+                card.innerHTML = `
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">${item.metadata.name}</h5>
+                            <p class="card-text">Namespace: ${item.metadata.namespace}</p>
+                            <p class="card-text d-flex justify-content-between align-items-center">
+                                URL: ${item.status.url}
+                                <i class="fas fa-copy" onclick="copyToClipboard('${item.status.url}')" style="cursor: pointer;"></i>
+                            </p>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        });
+</script>
+{% endblock %}

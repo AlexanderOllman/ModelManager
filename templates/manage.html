@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mt-4">Manage</h2>
+<ul class="nav nav-tabs" id="manageTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="isvc-tab" data-bs-toggle="tab" data-bs-target="#isvc" type="button" role="tab" aria-controls="isvc" aria-selected="true">InferenceService</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="csr-tab" data-bs-toggle="tab" data-bs-target="#csr" type="button" role="tab" aria-controls="csr" aria-selected="false">ClusterServingRuntime</button>
+    </li>
+</ul>
+<div class="tab-content" id="manageTabsContent">
+    <div class="tab-pane fade show active" id="isvc" role="tabpanel" aria-labelledby="isvc-tab">
+        <div id="isvc-container" class="mt-4">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="csr" role="tabpanel" aria-labelledby="csr-tab">
+        <div id="csr-container" class="mt-4">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function createTable(data, containerId) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        if (data.items.length === 0) {
+            container.innerHTML = '<p>No items found.</p>';
+            return;
+        }
+        const table = document.createElement('table');
+        table.className = 'table table-striped';
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        Object.keys(data.items[0]).forEach(key => {
+            const th = document.createElement('th');
+            th.textContent = key;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        data.items.forEach(item => {
+            const row = document.createElement('tr');
+            Object.values(item).forEach(value => {
+                const td = document.createElement('td');
+                td.textContent = JSON.stringify(value);
+                row.appendChild(td);
+            });
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+    }
+
+    function loadIsvcData() {
+        fetch('/api/isvc')
+            .then(response => response.json())
+            .then(data => createTable(data, 'isvc-container'));
+    }
+
+    function loadCsrData() {
+        fetch('/api/clusterservingruntime')
+            .then(response => response.json())
+            .then(data => createTable(data, 'csr-container'));
+    }
+
+    document.getElementById('isvc-tab').addEventListener('shown.bs.tab', loadIsvcData);
+    document.getElementById('csr-tab').addEventListener('shown.bs.tab', loadCsrData);
+
+    loadIsvcData();
+</script>
+{% endblock %}
