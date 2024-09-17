@@ -127,17 +127,19 @@
             
             // Protocols
             const protocolsCell = document.createElement('td');
-            protocolsCell.textContent = item.spec.supportedModelFormats[0].autoSelect.protocols.join(', ');
+            const protocols = item.spec.supportedModelFormats?.[0]?.autoSelect?.protocols || [];
+            protocolsCell.textContent = protocols.join(', ');
             row.appendChild(protocolsCell);
             
             // Container Image
             const imageCell = document.createElement('td');
-            imageCell.textContent = item.spec.containers[0].image;
+            imageCell.textContent = item.spec.containers?.[0]?.image || 'N/A';
             row.appendChild(imageCell);
             
             // Supported Model Formats
             const formatsCell = document.createElement('td');
-            formatsCell.textContent = item.spec.supportedModelFormats.map(f => f.name).join(', ');
+            const formats = item.spec.supportedModelFormats?.map(f => f.name) || [];
+            formatsCell.textContent = formats.join(', ');
             row.appendChild(formatsCell);
             
             // Created At
@@ -147,7 +149,7 @@
             
             // Ready Status
             const readyCell = document.createElement('td');
-            const readyCondition = item.status.conditions.find(c => c.type === 'Ready');
+            const readyCondition = item.status?.conditions?.find(c => c.type === 'Ready');
             const isReady = readyCondition && readyCondition.status === 'True';
             readyCell.innerHTML = `
                 <span class="badge ${isReady ? 'bg-success' : 'bg-danger'}">
@@ -161,7 +163,7 @@
         table.appendChild(tbody);
         container.appendChild(table);
     }
-
+    
     function loadIsvcData() {
         fetch('/api/isvc')
             .then(response => response.json())

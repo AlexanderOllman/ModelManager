@@ -2,6 +2,9 @@
 
 {% block content %}
 <h2 class="mt-4">Models</h2>
+<div class="mb-3">
+    <input type="text" id="modelSearch" class="form-control" placeholder="Search by name or namespace">
+</div>
 <div id="models-container" class="row">
     <div class="spinner-border" role="status">
         <span class="visually-hidden">Loading...</span>
@@ -33,28 +36,62 @@
         });
     }
 
+    function createModelCards(data) {
+        const container = document.getElementById('models-container');
+        container.innerHTML = '';
+        data.items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'col-md-3 mb-4';
+            card.innerHTML = `
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title">${item.metadata.name}</h5>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-light" type="button" id="dropdownMenuButton-${item.metadata.name}" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${item.metadata.name}">
+                                    <li><a class="dropdown-item" href="#">Action 1</a></li>
+                                    <li><a class="dropdown-item" href="#">Action 2</a></li>
+                                    <li><a class="dropdown-item" href="#">Action 3</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <span class="badge ${item.status.conditions.find(c => c.type === 'Ready').status === 'True' ? 'bg-success' : 'bg-danger'} mb-2">
+                            ${item.status.conditions.find(c => c.type === 'Ready').status === 'True' ? 'Ready' : 'Not Ready'}
+                        </span>
+                        <p class="card-text">Namespace: ${item.metadata.namespace}</p>
+                        <p class="card-text mt-auto d-flex justify-content-between align-items-center">
+                            URL: ${item.status.url}
+                            <i class="fas fa-copy" onclick="copyToClipboard('${item.status.url}')" style="cursor: pointer;"></i>
+                        </p>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function filterModels() {
+        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+        const cards = document.querySelectorAll('#models-container .col-md-3');
+        cards.forEach(card => {
+            const name = card.querySelector('.card-title').textContent.toLowerCase();
+            const namespace = card.querySelector('.card-text').textContent.toLowerCase();
+            if (name.includes(searchTerm) || namespace.includes(searchTerm)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
     fetch('/api/isvc')
         .then(response => response.json())
         .then(data => {
-            const container = document.getElementById('models-container');
-            container.innerHTML = '';
-            data.items.forEach(item => {
-                const card = document.createElement('div');
-                card.className = 'col-md-3 mb-4';
-                card.innerHTML = `
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">${item.metadata.name}</h5>
-                            <p class="card-text">Namespace: ${item.metadata.namespace}</p>
-                            <p class="card-text d-flex justify-content-between align-items-center">
-                                URL: ${item.status.url}
-                                <i class="fas fa-copy" onclick="copyToClipboard('${item.status.url}')" style="cursor: pointer;"></i>
-                            </p>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
+            createModelCards(data);
+            document.getElementById('modelSearch').addEventListener('input', filterModels);
         });
 </script>
 {% endblock %}

@@ -37,9 +37,17 @@
             display: none;
             margin-left: 0.5rem;
         }
+        .navbar {
+            padding-left: 4.5rem; /* Width of collapsed sidebar */
+            transition: padding-left 0.3s;
+        }
+        .sidebar:hover ~ .navbar {
+            padding-left: 16rem;
+        }
         .main-content {
             margin-left: 4.5rem;
             padding-top: 1rem;
+            transition: margin-left 0.3s;
         }
         .navbar {
             padding-left: 4.5rem; /* Width of collapsed sidebar */
