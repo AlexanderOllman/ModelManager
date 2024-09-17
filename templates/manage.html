@@ -30,7 +30,7 @@
 
 {% block scripts %}
 <script>
-    function createTable(data, containerId) {
+    function createInferenceServiceTable(data, containerId) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
         if (data.items.length === 0) {
@@ -38,12 +38,12 @@
             return;
         }
         const table = document.createElement('table');
-        table.className = 'table table-striped';
+        table.className = 'table table-striped table-hover';
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        Object.keys(data.items[0]).forEach(key => {
+        ['Name', 'Namespace', 'Model', 'Resources', 'URL', 'Ready'].forEach(header => {
             const th = document.createElement('th');
-            th.textContent = key;
+            th.textContent = header;
             headerRow.appendChild(th);
         });
         thead.appendChild(headerRow);
@@ -51,11 +51,111 @@
         const tbody = document.createElement('tbody');
         data.items.forEach(item => {
             const row = document.createElement('tr');
-            Object.values(item).forEach(value => {
-                const td = document.createElement('td');
-                td.textContent = JSON.stringify(value);
-                row.appendChild(td);
-            });
+            
+            // Name
+            const nameCell = document.createElement('td');
+            nameCell.textContent = item.metadata.name;
+            row.appendChild(nameCell);
+            
+            // Namespace
+            const namespaceCell = document.createElement('td');
+            namespaceCell.textContent = item.metadata.namespace;
+            row.appendChild(namespaceCell);
+            
+            // Model
+            const modelCell = document.createElement('td');
+            modelCell.textContent = item.spec.predictor.model.modelFormat.name;
+            row.appendChild(modelCell);
+            
+            // Resources
+            const resourcesCell = document.createElement('td');
+            const resources = item.spec.predictor.model.resources;
+            resourcesCell.innerHTML = `
+                <strong>Limits:</strong> ${JSON.stringify(resources.limits)}<br>
+                <strong>Requests:</strong> ${JSON.stringify(resources.requests)}
+            `;
+            row.appendChild(resourcesCell);
+            
+            // URL
+            const urlCell = document.createElement('td');
+            urlCell.textContent = item.status.url;
+            row.appendChild(urlCell);
+            
+            // Ready Status
+            const readyCell = document.createElement('td');
+            const readyCondition = item.status.conditions.find(c => c.type === 'Ready');
+            const isReady = readyCondition && readyCondition.status === 'True';
+            readyCell.innerHTML = `
+                <span class="badge ${isReady ? 'bg-success' : 'bg-danger'}">
+                    ${isReady ? 'Ready' : 'Not Ready'}
+                </span>
+            `;
+            row.appendChild(readyCell);
+            
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+    }
+
+    function createClusterServingRuntimeTable(data, containerId) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        if (data.items.length === 0) {
+            container.innerHTML = '<p>No items found.</p>';
+            return;
+        }
+        const table = document.createElement('table');
+        table.className = 'table table-striped table-hover';
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['Name', 'Protocols', 'Container Image', 'Supported Model Formats', 'Created At', 'Ready'].forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        data.items.forEach(item => {
+            const row = document.createElement('tr');
+            
+            // Name
+            const nameCell = document.createElement('td');
+            nameCell.textContent = item.metadata.name;
+            row.appendChild(nameCell);
+            
+            // Protocols
+            const protocolsCell = document.createElement('td');
+            protocolsCell.textContent = item.spec.supportedModelFormats[0].autoSelect.protocols.join(', ');
+            row.appendChild(protocolsCell);
+            
+            // Container Image
+            const imageCell = document.createElement('td');
+            imageCell.textContent = item.spec.containers[0].image;
+            row.appendChild(imageCell);
+            
+            // Supported Model Formats
+            const formatsCell = document.createElement('td');
+            formatsCell.textContent = item.spec.supportedModelFormats.map(f => f.name).join(', ');
+            row.appendChild(formatsCell);
+            
+            // Created At
+            const createdCell = document.createElement('td');
+            createdCell.textContent = new Date(item.metadata.creationTimestamp).toLocaleString();
+            row.appendChild(createdCell);
+            
+            // Ready Status
+            const readyCell = document.createElement('td');
+            const readyCondition = item.status.conditions.find(c => c.type === 'Ready');
+            const isReady = readyCondition && readyCondition.status === 'True';
+            readyCell.innerHTML = `
+                <span class="badge ${isReady ? 'bg-success' : 'bg-danger'}">
+                    ${isReady ? 'Ready' : 'Not Ready'}
+                </span>
+            `;
+            row.appendChild(readyCell);
+            
             tbody.appendChild(row);
         });
         table.appendChild(tbody);
@@ -65,13 +165,13 @@
     function loadIsvcData() {
         fetch('/api/isvc')
             .then(response => response.json())
-            .then(data => createTable(data, 'isvc-container'));
+            .then(data => createInferenceServiceTable(data, 'isvc-container'));
     }
 
     function loadCsrData() {
         fetch('/api/clusterservingruntime')
             .then(response => response.json())
-            .then(data => createTable(data, 'csr-container'));
+            .then(data => createClusterServingRuntimeTable(data, 'csr-container'));
     }
 
     document.getElementById('isvc-tab').addEventListener('shown.bs.tab', loadIsvcData);
