@@ -63,7 +63,7 @@ def get_pvc_models():
         return jsonify({"error": "Kubernetes configuration not available"}), 500
 
     pvc_name = "models-pvc"
-    namespace = "default"  # Replace with the correct namespace if different
+    namespace = "aollman-hpe-com-af6e962c"  # Replace with the correct namespace if different
 
     try:
         # Get the PVC
