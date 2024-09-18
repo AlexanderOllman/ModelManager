@@ -1,13 +1,39 @@
 from flask import Flask, render_template, jsonify
 import subprocess
 import json
+import os
 from kubernetes import client, config
 
 app = Flask(__name__)
 
-# Load Kubernetes configuration
-config.load_kube_config()
-v1 = client.CoreV1Api()
+def get_kubeconfig():
+    # Specify the path where you want to save the kubeconfig file
+    kubeconfig_path = os.path.join(os.path.dirname(__file__), 'kubeconfig')
+    
+    # Run the command to get the kubeconfig content
+    try:
+        kubeconfig_content = subprocess.check_output(
+            ["kubectl", "config", "view", "--raw"],
+            stderr=subprocess.STDOUT
+        ).decode('utf-8')
+
+        # Write the content to the file
+        with open(kubeconfig_path, 'w') as f:
+            f.write(kubeconfig_content)
+
+        return kubeconfig_path
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting kubeconfig: {e.output.decode('utf-8')}")
+        return None
+
+# Get and load Kubernetes configuration
+kubeconfig_path = get_kubeconfig()
+if kubeconfig_path:
+    config.load_kube_config(config_file=kubeconfig_path)
+    v1 = client.CoreV1Api()
+else:
+    print("Failed to load kubeconfig. Kubernetes operations may not work.")
+    v1 = None
 
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
@@ -43,6 +69,9 @@ def get_clusterservingruntime():
 
 @app.route('/api/pvc-models')
 def get_pvc_models():
+    if not v1:
+        return jsonify({"error": "Kubernetes configuration not available"}), 500
+
     pvc_name = "models-pvc"
     namespace = "default"  # Replace with the correct namespace if different
 
