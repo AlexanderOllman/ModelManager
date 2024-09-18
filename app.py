@@ -1,20 +1,19 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 import subprocess
 import json
 import os
 from kubernetes import client, config
-from kubernetes.config.config_exception import ConfigException
+from kubernetes.client.rest import ApiException
+from kubernetes.stream import stream
 
 app = Flask(__name__)
 
 def load_kubernetes_config():
     try:
-        # Try to load in-cluster configuration
         config.load_incluster_config()
         print("Loaded in-cluster configuration")
     except config.config_exception.ConfigException:
         try:
-            # If that fails, try to load from local kubeconfig
             config.load_kube_config()
             print("Loaded local kubeconfig")
         except config.config_exception.ConfigException:
@@ -24,10 +23,6 @@ def load_kubernetes_config():
     return client.CoreV1Api()
 
 v1 = load_kubernetes_config()
-
-def run_kubectl_command(command):
-    result = subprocess.run(command, capture_output=True, text=True, shell=True)
-    return result.stdout
 
 @app.route('/')
 def index():
@@ -62,31 +57,53 @@ def get_pvc_models():
     if not v1:
         return jsonify({"error": "Kubernetes configuration not available"}), 500
 
-    pvc_name = "models-pvc"
-    namespace = "aollman-hpe-com-af6e962c"  # Replace with the correct namespace if different
+    pvc_name = request.args.get('pvc')
+    namespace = request.args.get('namespace', 'default')
+
+    if not pvc_name:
+        return jsonify({"error": "PVC name is required"}), 400
 
     try:
         # Get the PVC
         pvc = v1.read_namespaced_persistent_volume_claim(pvc_name, namespace)
 
-        # Get the pod that mounts this PVC
-        pods = v1.list_namespaced_pod(namespace)
-        mounting_pod = None
-        for pod in pods.items:
-            for volume in pod.spec.volumes:
-                if volume.persistent_volume_claim and volume.persistent_volume_claim.claim_name == pvc_name:
-                    mounting_pod = pod
-                    break
-            if mounting_pod:
+        # Create a temporary pod to mount the PVC
+        pod_name = f"pvc-reader-{pvc_name.lower()}"
+        pod_manifest = {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {"name": pod_name},
+            "spec": {
+                "containers": [{
+                    "name": "pvc-reader",
+                    "image": "busybox",
+                    "command": ["sleep", "3600"],
+                    "volumeMounts": [{
+                        "name": "pvc-mount",
+                        "mountPath": "/mnt/pvc"
+                    }]
+                }],
+                "volumes": [{
+                    "name": "pvc-mount",
+                    "persistentVolumeClaim": {"claimName": pvc_name}
+                }],
+                "restartPolicy": "Never"
+            }
+        }
+
+        # Create the pod
+        v1.create_namespaced_pod(namespace, pod_manifest)
+
+        # Wait for the pod to be ready
+        while True:
+            pod = v1.read_namespaced_pod(pod_name, namespace)
+            if pod.status.phase == 'Running':
                 break
 
-        if not mounting_pod:
-            return jsonify({"error": "No pod found mounting the PVC"}), 404
-
         # Execute 'ls -lh' command in the pod
-        exec_command = ['/bin/sh', '-c', 'ls -lh /mnt/models']  # Adjust the mount path if necessary
+        exec_command = ['ls', '-lh', '/mnt/pvc']
         resp = stream(v1.connect_get_namespaced_pod_exec,
-                      mounting_pod.metadata.name,
+                      pod_name,
                       namespace,
                       command=exec_command,
                       stderr=True, stdin=False,
@@ -101,13 +118,15 @@ def get_pvc_models():
                     size, name = parts[4], ' '.join(parts[8:])
                     files.append({"name": name, "size": size})
 
+        # Delete the temporary pod
+        v1.delete_namespaced_pod(pod_name, namespace)
+
         return jsonify(files)
 
+    except ApiException as e:
+        return jsonify({"error": f"Kubernetes API error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-def stream(func, *args, **kwargs):
-    return func(*args, **kwargs)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port='8080')

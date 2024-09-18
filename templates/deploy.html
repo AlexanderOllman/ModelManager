@@ -3,6 +3,19 @@
 {% block content %}
 <h2 class="mt-4">Deploy Model</h2>
 <div class="mb-3">
+    <form id="pvcForm" class="mb-4">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <input type="text" id="pvcName" class="form-control" placeholder="PVC Name" required>
+            </div>
+            <div class="col-md-4">
+                <input type="text" id="pvcNamespace" class="form-control" placeholder="PVC Namespace" required>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary">Mount PVC</button>
+            </div>
+        </div>
+    </form>
     <input type="text" id="modelSearch" class="form-control" placeholder="Search models">
 </div>
 <div id="models-container" class="row">
@@ -17,6 +30,10 @@
     function createModelCards(data) {
         const container = document.getElementById('models-container');
         container.innerHTML = '';
+        if (data.error) {
+            container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            return;
+        }
         data.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
@@ -55,11 +72,20 @@
         });
     }
 
-    fetch('/api/pvc-models')
-        .then(response => response.json())
-        .then(data => {
-            createModelCards(data);
-            document.getElementById('modelSearch').addEventListener('input', filterModels);
-        });
+    function loadModels(pvcName, pvcNamespace) {
+        fetch(`/api/pvc-models?pvc=${pvcName}&namespace=${pvcNamespace}`)
+            .then(response => response.json())
+            .then(data => {
+                createModelCards(data);
+                document.getElementById('modelSearch').addEventListener('input', filterModels);
+            });
+    }
+
+    document.getElementById('pvcForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const pvcName = document.getElementById('pvcName').value;
+        const pvcNamespace = document.getElementById('pvcNamespace').value;
+        loadModels(pvcName, pvcNamespace);
+    });
 </script>
 {% endblock %}
