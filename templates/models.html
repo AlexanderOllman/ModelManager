@@ -12,10 +12,79 @@
 </div>
 {% endblock %}
 
+{% block styles %}
+<style>
+.card {
+  --push: 8px;
+  width: 320px;
+  border: 1px solid black;
+  border-radius: 12px;
+  padding: 20px;
+  background-color: white;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  cursor: pointer;
+  position: relative;
+  transition: box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
+  box-shadow: var(--push) var(--push) 0 0 black;
+  will-change: box-shadow, transform;
+  margin-bottom: 30px;
+}
+.card:hover {
+  --push: 4px;
+  box-shadow: var(--push) var(--push) 0 0 black;
+  transform: translate(var(--push), var(--push));
+}
+.card:active {
+  box-shadow: 0 0 0 0 black;
+  transform: translate(8px, 8px);
+}
+.image-container {
+  background-color: SandyBrown;
+  width: 100%;
+  height: 160px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tag {
+  background-color: SandyBrown;
+  align-self: flex-start;
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.25px;
+}
+.card h1 {
+  margin: 8px 0;
+  font-size: 20px;
+}
+.publication-date {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.75);
+}
+.card p {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.65);
+  line-height: 1.5;
+}
+.user-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.copy-icon {
+  cursor: pointer;
+}
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script>
     function copyToClipboard(text, event) {
-        event.stopPropagation();
         navigator.clipboard.writeText(text).then(() => {
             const popup = document.createElement('div');
             popup.textContent = 'URL copied!';
@@ -43,9 +112,8 @@
         data.items.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
-            const readyCondition = item.status.conditions.find(c => c.type === 'Ready');
-            const isReady = readyCondition && readyCondition.status === 'True';
             const deploymentTime = new Date(item.metadata.creationTimestamp).toLocaleString();
+            const isReady = item.status.conditions.find(c => c.type === 'Ready').status === 'True';
             card.innerHTML = `
                 <div class="card">
                     <div class="image-container">
@@ -58,14 +126,10 @@
                         <span>Deployed ${deploymentTime}</span>
                     </div>
                     <h1>${item.metadata.name}</h1>
-                    <p>
-                        Namespace: ${item.metadata.namespace}<br>
-                        URL: ${item.status.url}
-                        <i class="fas fa-copy copy-icon" onclick="copyToClipboard('${item.status.url}', event)" title="Copy URL"></i>
-                    </p>
+                    <p>Namespace: ${item.metadata.namespace}</p>
                     <div class="user-info">
-                        <div class="avatar">${item.metadata.name.substring(0, 2).toUpperCase()}</div>
-                        <span class="name">${item.spec.predictor.model.modelFormat.name}</span>
+                        <span>URL: ${item.status.url}</span>
+                        <i class="fas fa-copy copy-icon" onclick="copyToClipboard('${item.status.url}', event)"></i>
                     </div>
                 </div>
             `;
@@ -94,109 +158,4 @@
             document.getElementById('modelSearch').addEventListener('input', filterModels);
         });
 </script>
-{% endblock %}
-
-{% block styles %}
-<style>
-    .card {
-        --push: 8px;
-        min-width: 320px;
-        max-width: 320px;
-        border: 1px solid black;
-        border-radius: 12px;
-        padding: 20px;
-        background-color: white;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        cursor: pointer;
-        position: relative;
-        transition: box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
-        box-shadow: var(--push) var(--push) 0 0 black;
-        will-change: box-shadow, transform;
-        height: 100%;
-    }
-    .card:active {
-        box-shadow: 0 0 0 0 black;
-        transform: translate(var(--push), var(--push));
-    }
-    .card:not(:active):hover {
-        --push: 4px;
-        box-shadow: var(--push) var(--push) 0 0 black;
-        transform: translate(var(--push), var(--push));
-    }
-    .image-container {
-        background-color: SandyBrown;
-        width: 100%;
-        height: 160px;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-    .image {
-        background-image: url("https://cdn.dribbble.com/users/1186668/screenshots/17303363/media/bc6aa9915a58811524bbbfd89cbb2d71.jpg");
-        background-position: center;
-        background-size: 100%;
-        background-repeat: no-repeat;
-        height: 100%;
-        width: 100%;
-    }
-    .tag {
-        background-color: SandyBrown;
-        align-self: flex-start;
-        border-radius: 4px;
-        padding: 8px 10px;
-        font-size: 12px;
-        font-weight: bold;
-        letter-spacing: 0.25px;
-    }
-    .card h1 {
-        margin: 8px 0;
-        font-size: 20px;
-    }
-    .publication-date {
-        font-size: 14px;
-        color: rgba(0, 0, 0, 0.75);
-    }
-    .card p {
-        margin: 0;
-        font-size: 14px;
-        color: rgba(0, 0, 0, 0.65);
-        line-height: 1.5;
-    }
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 8px;
-    }
-    .avatar {
-        background-color: black;
-        border-radius: 50%;
-        height: 28px;
-        width: 28px;
-        font-size: 8px;
-        color: sandybrown;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        font-weight: bold;
-    }
-    .name {
-        font-weight: bold;
-        font-size: 12px;
-    }
-    .copy-icon {
-        cursor: pointer;
-        margin-left: 5px;
-    }
-    #models-container {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: start;
-    }
-    .col-md-4 {
-        display: flex;
-        justify-content: center;
-    }
-</style>
 {% endblock %}

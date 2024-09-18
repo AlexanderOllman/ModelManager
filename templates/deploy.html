@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mt-4">Deploy Model</h2>
+<div class="mb-3">
+    <input type="text" id="modelSearch" class="form-control" placeholder="Search models">
+</div>
+<div id="models-container" class="row">
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function createModelCards(data) {
+        const container = document.getElementById('models-container');
+        container.innerHTML = '';
+        data.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'col-md-4 mb-4';
+            card.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">${item.name}</h5>
+                        <p class="card-text">Size: ${item.size}</p>
+                        <button class="btn btn-primary deploy-btn" data-model="${item.name}">Deploy</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+
+        // Add event listeners for deploy buttons
+        document.querySelectorAll('.deploy-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const modelName = e.target.getAttribute('data-model');
+                // TODO: Implement deployment logic
+                console.log(`Deploying model: ${modelName}`);
+            });
+        });
+    }
+
+    function filterModels() {
+        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+        const cards = document.querySelectorAll('#models-container .col-md-4');
+        cards.forEach(card => {
+            const name = card.querySelector('.card-title').textContent.toLowerCase();
+            if (name.includes(searchTerm)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    fetch('/api/pvc-models')
+        .then(response => response.json())
+        .then(data => {
+            createModelCards(data);
+            document.getElementById('modelSearch').addEventListener('input', filterModels);
+        });
+</script>
+{% endblock %}
