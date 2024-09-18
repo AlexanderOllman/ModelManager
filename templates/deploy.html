@@ -3,19 +3,6 @@
 {% block content %}
 <h2 class="mt-4">Deploy Model</h2>
 <div class="mb-3">
-    <form id="pvcForm" class="mb-4">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <input type="text" id="pvcName" class="form-control" placeholder="PVC Name" required>
-            </div>
-            <div class="col-md-4">
-                <input type="text" id="pvcNamespace" class="form-control" placeholder="PVC Namespace" required>
-            </div>
-            <div class="col-md-4">
-                <button type="submit" class="btn btn-primary">Mount PVC</button>
-            </div>
-        </div>
-    </form>
     <input type="text" id="modelSearch" class="form-control" placeholder="Search models">
 </div>
 <div id="models-container" class="row">
@@ -30,32 +17,32 @@
     function createModelCards(data) {
         const container = document.getElementById('models-container');
         container.innerHTML = '';
-        if (data.error) {
-            container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
-            return;
-        }
         data.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
             card.innerHTML = `
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">${item.name}</h5>
-                        <p class="card-text">Size: ${item.size}</p>
-                        <button class="btn btn-primary deploy-btn" data-model="${item.name}">Deploy</button>
+                <div class="card h-100">
+                    <div class="image-container">
+                        <img src="data:image/png;base64,${item.logoImage}" class="card-img-top" alt="${item.displayName}">
+                    </div>
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">${item.displayName}</h5>
+                        <p class="card-text flex-grow-1">${item.description}</p>
+                        <div class="mt-auto">
+                            <p class="card-text"><small class="text-muted">Version: ${item.version}</small></p>
+                            <p class="card-text"><small class="text-muted">Size: ${item.modelSize}</small></p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary">Deploy</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary">Details</button>
+                                </div>
+                                <span class="badge ${item.status === 'ready' ? 'bg-success' : 'bg-warning'}">${item.status}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
             container.appendChild(card);
-        });
-
-        // Add event listeners for deploy buttons
-        document.querySelectorAll('.deploy-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const modelName = e.target.getAttribute('data-model');
-                // TODO: Implement deployment logic
-                console.log(`Deploying model: ${modelName}`);
-            });
         });
     }
 
@@ -63,8 +50,9 @@
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
         const cards = document.querySelectorAll('#models-container .col-md-4');
         cards.forEach(card => {
-            const name = card.querySelector('.card-title').textContent.toLowerCase();
-            if (name.includes(searchTerm)) {
+            const title = card.querySelector('.card-title').textContent.toLowerCase();
+            const description = card.querySelector('.card-text').textContent.toLowerCase();
+            if (title.includes(searchTerm) || description.includes(searchTerm)) {
                 card.style.display = '';
             } else {
                 card.style.display = 'none';
@@ -72,20 +60,47 @@
         });
     }
 
-    function loadModels(pvcName, pvcNamespace) {
-        fetch(`/api/pvc-models?pvc=${pvcName}&namespace=${pvcNamespace}`)
-            .then(response => response.json())
-            .then(data => {
-                createModelCards(data);
-                document.getElementById('modelSearch').addEventListener('input', filterModels);
-            });
+    function getK8sDomain() {
+        return '{{ k8s_domain }}';
     }
 
-    document.getElementById('pvcForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const pvcName = document.getElementById('pvcName').value;
-        const pvcNamespace = document.getElementById('pvcNamespace').value;
-        loadModels(pvcName, pvcNamespace);
-    });
+    const k8sDomain = getK8sDomain();
+    fetch(`https://home.${k8sDomain}/api/v1/ai-applications`)
+        .then(response => response.json())
+        .then(data => {
+            createModelCards(data);
+            document.getElementById('modelSearch').addEventListener('input', filterModels);
+        })
+        .catch(error => {
+            console.error('Error fetching model data:', error);
+            document.getElementById('models-container').innerHTML = '<p class="alert alert-danger">Error loading models. Please try again later.</p>';
+        });
 </script>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .card {
+        transition: transform 0.2s;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+    }
+    .image-container {
+        height: 200px;
+        overflow: hidden;
+    }
+    .card-img-top {
+        object-fit: cover;
+        height: 100%;
+        width: 100%;
+    }
+    .card-body {
+        display: flex;
+        flex-direction: column;
+    }
+    .card-text {
+        flex-grow: 1;
+    }
+</style>
 {% endblock %}
