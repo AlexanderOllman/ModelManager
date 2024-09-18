@@ -14,7 +14,8 @@
 
 {% block scripts %}
 <script>
-    function copyToClipboard(text) {
+    function copyToClipboard(text, event) {
+        event.stopPropagation();
         navigator.clipboard.writeText(text).then(() => {
             const popup = document.createElement('div');
             popup.textContent = 'URL copied!';
@@ -41,31 +42,30 @@
         container.innerHTML = '';
         data.items.forEach(item => {
             const card = document.createElement('div');
-            card.className = 'col-md-3 mb-4';
+            card.className = 'col-md-4 mb-4';
+            const readyCondition = item.status.conditions.find(c => c.type === 'Ready');
+            const isReady = readyCondition && readyCondition.status === 'True';
+            const deploymentTime = new Date(item.metadata.creationTimestamp).toLocaleString();
             card.innerHTML = `
-                <div class="card h-100">
-                    <div class="card-body d-flex flex-column">
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h5 class="card-title">${item.metadata.name}</h5>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-light" type="button" id="dropdownMenuButton-${item.metadata.name}" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-ellipsis-v"></i>
-                                </button>
-                                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${item.metadata.name}">
-                                    <li><a class="dropdown-item" href="#">Action 1</a></li>
-                                    <li><a class="dropdown-item" href="#">Action 2</a></li>
-                                    <li><a class="dropdown-item" href="#">Action 3</a></li>
-                                </ul>
-                            </div>
-                        </div>
-                        <span class="badge ${item.status.conditions.find(c => c.type === 'Ready').status === 'True' ? 'bg-success' : 'bg-danger'} mb-2">
-                            ${item.status.conditions.find(c => c.type === 'Ready').status === 'True' ? 'Ready' : 'Not Ready'}
-                        </span>
-                        <p class="card-text">Namespace: ${item.metadata.namespace}</p>
-                        <p class="card-text mt-auto d-flex justify-content-between align-items-center">
-                            URL: ${item.status.url}
-                            <i class="fas fa-copy" onclick="copyToClipboard('${item.status.url}')" style="cursor: pointer;"></i>
-                        </p>
+                <div class="card">
+                    <div class="image-container">
+                        <div class="image"></div>
+                    </div>
+                    <div class="tag">
+                        <span>${isReady ? 'Ready' : 'Not Ready'}</span>
+                    </div>
+                    <div class="publication-date">
+                        <span>Deployed ${deploymentTime}</span>
+                    </div>
+                    <h1>${item.metadata.name}</h1>
+                    <p>
+                        Namespace: ${item.metadata.namespace}<br>
+                        URL: ${item.status.url}
+                        <i class="fas fa-copy copy-icon" onclick="copyToClipboard('${item.status.url}', event)" title="Copy URL"></i>
+                    </p>
+                    <div class="user-info">
+                        <div class="avatar">${item.metadata.name.substring(0, 2).toUpperCase()}</div>
+                        <span class="name">${item.spec.predictor.model.modelFormat.name}</span>
                     </div>
                 </div>
             `;
@@ -75,10 +75,10 @@
 
     function filterModels() {
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        const cards = document.querySelectorAll('#models-container .col-md-3');
+        const cards = document.querySelectorAll('#models-container .col-md-4');
         cards.forEach(card => {
-            const name = card.querySelector('.card-title').textContent.toLowerCase();
-            const namespace = card.querySelector('.card-text').textContent.toLowerCase();
+            const name = card.querySelector('h1').textContent.toLowerCase();
+            const namespace = card.querySelector('p').textContent.toLowerCase();
             if (name.includes(searchTerm) || namespace.includes(searchTerm)) {
                 card.style.display = '';
             } else {
@@ -94,4 +94,109 @@
             document.getElementById('modelSearch').addEventListener('input', filterModels);
         });
 </script>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .card {
+        --push: 8px;
+        min-width: 320px;
+        max-width: 320px;
+        border: 1px solid black;
+        border-radius: 12px;
+        padding: 20px;
+        background-color: white;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        cursor: pointer;
+        position: relative;
+        transition: box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
+        box-shadow: var(--push) var(--push) 0 0 black;
+        will-change: box-shadow, transform;
+        height: 100%;
+    }
+    .card:active {
+        box-shadow: 0 0 0 0 black;
+        transform: translate(var(--push), var(--push));
+    }
+    .card:not(:active):hover {
+        --push: 4px;
+        box-shadow: var(--push) var(--push) 0 0 black;
+        transform: translate(var(--push), var(--push));
+    }
+    .image-container {
+        background-color: SandyBrown;
+        width: 100%;
+        height: 160px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .image {
+        background-image: url("https://cdn.dribbble.com/users/1186668/screenshots/17303363/media/bc6aa9915a58811524bbbfd89cbb2d71.jpg");
+        background-position: center;
+        background-size: 100%;
+        background-repeat: no-repeat;
+        height: 100%;
+        width: 100%;
+    }
+    .tag {
+        background-color: SandyBrown;
+        align-self: flex-start;
+        border-radius: 4px;
+        padding: 8px 10px;
+        font-size: 12px;
+        font-weight: bold;
+        letter-spacing: 0.25px;
+    }
+    .card h1 {
+        margin: 8px 0;
+        font-size: 20px;
+    }
+    .publication-date {
+        font-size: 14px;
+        color: rgba(0, 0, 0, 0.75);
+    }
+    .card p {
+        margin: 0;
+        font-size: 14px;
+        color: rgba(0, 0, 0, 0.65);
+        line-height: 1.5;
+    }
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .avatar {
+        background-color: black;
+        border-radius: 50%;
+        height: 28px;
+        width: 28px;
+        font-size: 8px;
+        color: sandybrown;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+    }
+    .name {
+        font-weight: bold;
+        font-size: 12px;
+    }
+    .copy-icon {
+        cursor: pointer;
+        margin-left: 5px;
+    }
+    #models-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: start;
+    }
+    .col-md-4 {
+        display: flex;
+        justify-content: center;
+    }
+</style>
 {% endblock %}
