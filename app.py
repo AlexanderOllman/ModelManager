@@ -3,37 +3,27 @@ import subprocess
 import json
 import os
 from kubernetes import client, config
+from kubernetes.config.config_exception import ConfigException
 
 app = Flask(__name__)
 
-def get_kubeconfig():
-    # Specify the path where you want to save the kubeconfig file
-    kubeconfig_path = os.path.join(os.path.dirname(__file__), 'kubeconfig')
-    
-    # Run the command to get the kubeconfig content
+def load_kubernetes_config():
     try:
-        kubeconfig_content = subprocess.check_output(
-            ["kubectl", "config", "view", "--raw"],
-            stderr=subprocess.STDOUT
-        ).decode('utf-8')
+        # Try to load in-cluster configuration
+        config.load_incluster_config()
+        print("Loaded in-cluster configuration")
+    except config.config_exception.ConfigException:
+        try:
+            # If that fails, try to load from local kubeconfig
+            config.load_kube_config()
+            print("Loaded local kubeconfig")
+        except config.config_exception.ConfigException:
+            print("Failed to load both in-cluster and local configurations")
+            return None
+    
+    return client.CoreV1Api()
 
-        # Write the content to the file
-        with open(kubeconfig_path, 'w') as f:
-            f.write(kubeconfig_content)
-
-        return kubeconfig_path
-    except subprocess.CalledProcessError as e:
-        print(f"Error getting kubeconfig: {e.output.decode('utf-8')}")
-        return None
-
-# Get and load Kubernetes configuration
-kubeconfig_path = get_kubeconfig()
-if kubeconfig_path:
-    config.load_kube_config(config_file=kubeconfig_path)
-    v1 = client.CoreV1Api()
-else:
-    print("Failed to load kubeconfig. Kubernetes operations may not work.")
-    v1 = None
+v1 = load_kubernetes_config()
 
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
