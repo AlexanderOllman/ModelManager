@@ -14,6 +14,16 @@
 
 {% block scripts %}
 <script>
+    function url_domain(data) {
+        var a = document.createElement('a');
+        a.href = data;
+        return a.hostname;
+    }
+
+    function getK8sDomain() {
+        return url_domain(window.location.href);
+    }
+
     function createModelCards(data) {
         const container = document.getElementById('models-container');
         container.innerHTML = '';
@@ -36,7 +46,7 @@
                                     <button type="button" class="btn btn-sm btn-outline-primary">Deploy</button>
                                     <button type="button" class="btn btn-sm btn-outline-secondary">Details</button>
                                 </div>
-                                <span class="badge ${item.status === 'ready' ? 'bg-success' : 'bg-warning'}">${item.status}</span>
+                                <span class="badge bg-${item.status === 'ready' ? 'success' : 'warning'}">${item.status}</span>
                             </div>
                         </div>
                     </div>
@@ -60,20 +70,27 @@
         });
     }
 
-    function getK8sDomain() {
-        return '{{ k8s_domain }}';
-    }
-
     const k8sDomain = getK8sDomain();
     fetch(`https://home.${k8sDomain}/api/v1/ai-applications`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
             createModelCards(data);
             document.getElementById('modelSearch').addEventListener('input', filterModels);
         })
         .catch(error => {
             console.error('Error fetching model data:', error);
-            document.getElementById('models-container').innerHTML = '<p class="alert alert-danger">Error loading models. Please try again later.</p>';
+            document.getElementById('models-container').innerHTML = `
+                <div class="col-12">
+                    <div class="alert alert-danger" role="alert">
+                        Error loading models. Please try again later. Details: ${error.message}
+                    </div>
+                </div>
+            `;
         });
 </script>
 {% endblock %}
@@ -85,6 +102,7 @@
     }
     .card:hover {
         transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
     .image-container {
         height: 200px;
@@ -101,6 +119,9 @@
     }
     .card-text {
         flex-grow: 1;
+    }
+    .btn-group {
+        margin-top: 10px;
     }
 </style>
 {% endblock %}
