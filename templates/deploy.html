@@ -14,14 +14,12 @@
 
 {% block scripts %}
 <script>
-    function url_domain(data) {
-        var a = document.createElement('a');
-        a.href = data;
-        return a.hostname;
-    }
-
     function getK8sDomain() {
-        return url_domain(window.location.href);
+        const fullDomain = window.location.hostname;
+        const parts = fullDomain.split('.');
+        // Remove the 'model-manager' subdomain
+        parts.shift();
+        return parts.join('.');
     }
 
     function createModelCards(data) {
