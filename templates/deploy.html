@@ -69,7 +69,7 @@
     }
 
     const k8sDomain = getK8sDomain();
-    fetch(`https://home.${k8sDomain}/api/v1/ai-applications`)
+    fetch(`/api/ai-applications?domain=${encodeURIComponent(k8sDomain)}`)
         .then(response => {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
