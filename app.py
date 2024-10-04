@@ -46,6 +46,9 @@ def deploy_model():
     # Check if runtime exists
     runtime_check = run_kubectl_command(f"kubectl get clusterservingruntime {runtime_name}")[1]
     runtime_exists = "NotFound" not in runtime_check
+    print("Runtime check:")
+    print(runtime_check)
+    print(runtime_exists)
 
     if runtime_exists:
         return jsonify({
