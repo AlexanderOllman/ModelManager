@@ -2,25 +2,63 @@
 
 {% block content %}
 <h2 class="mt-4">Deploy Model</h2>
-<div class="mb-3">
-    <input type="text" id="modelSearch" class="form-control" placeholder="Search models">
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <input type="text" id="modelSearch" class="form-control w-75" placeholder="Search models">
+    <button id="addModelBtn" class="btn btn-primary">Add Model</button>
 </div>
 <div id="models-container" class="row">
     <div class="spinner-border" role="status">
         <span class="visually-hidden">Loading...</span>
     </div>
 </div>
+<div id="add-model-form" class="mt-4" style="display: none;">
+    <h3>Add New Model</h3>
+    <form id="newModelForm">
+        <div class="mb-3">
+            <label for="modelName" class="form-label">Model Name</label>
+            <input type="text" class="form-control" id="modelName" required>
+        </div>
+        <div class="mb-3">
+            <label for="namespace" class="form-label">Namespace</label>
+            <input type="text" class="form-control" id="namespace" required>
+        </div>
+        <div class="mb-3">
+            <label for="containerImage" class="form-label">Container Image Path</label>
+            <input type="text" class="form-control" id="containerImage" required>
+        </div>
+        <div class="mb-3">
+            <label for="modelFormat" class="form-label">Model Format</label>
+            <input type="text" class="form-control" id="modelFormat" required>
+        </div>
+        <div class="mb-3">
+            <label for="runtime" class="form-label">Runtime</label>
+            <input type="text" class="form-control" id="runtime" required>
+        </div>
+        <div class="mb-3">
+            <label for="storageUri" class="form-label">Storage URI</label>
+            <input type="text" class="form-control" id="storageUri" required>
+        </div>
+        <div class="mb-3">
+            <label for="cpuLimit" class="form-label">CPU Limit</label>
+            <input type="number" class="form-control" id="cpuLimit" required>
+        </div>
+        <div class="mb-3">
+            <label for="memoryLimit" class="form-label">Memory Limit (Gi)</label>
+            <input type="number" class="form-control" id="memoryLimit" required>
+        </div>
+        <div class="mb-3">
+            <label for="gpuLimit" class="form-label">GPU Limit</label>
+            <input type="number" class="form-control" id="gpuLimit" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Model</button>
+        <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
+    </form>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    function getK8sDomain() {
-        const fullDomain = window.location.hostname;
-        const parts = fullDomain.split('.');
-        // Remove the 'model-manager' subdomain
-        parts.shift();
-        return parts.join('.');
-    }
+    let models = [];
 
     function createModelCards(data) {
         const container = document.getElementById('models-container');
@@ -29,97 +67,292 @@
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
             card.innerHTML = `
-                <div class="card h-100">
+                <div class="card">
                     <div class="image-container">
-                        <img src="data:image/png;base64,${item.logoImage}" class="card-img-top" alt="${item.displayName}">
+                        <div class="image"></div>
                     </div>
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title">${item.displayName}</h5>
-                        <p class="card-text flex-grow-1">${item.description}</p>
-                        <div class="mt-auto">
-                            <p class="card-text"><small class="text-muted">Version: ${item.version}</small></p>
-                            <p class="card-text"><small class="text-muted">Size: ${item.modelSize}</small></p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="btn-group">
-                                    <button type="button" class="btn btn-sm btn-outline-primary">Deploy</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary">Details</button>
-                                </div>
-                                <span class="badge bg-${item.status === 'ready' ? 'success' : 'warning'}">${item.status}</span>
-                            </div>
-                        </div>
+                    <div class="tag">
+                        <span>Ready to Deploy</span>
                     </div>
+                    <div class="publication-date">
+                        <span>Added ${new Date(item.addedDate).toLocaleString()}</span>
+                    </div>
+                    <h1>${item.modelName}</h1>
+                    <p>
+                        Namespace: ${item.namespace}<br>
+                        Image: ${item.containerImage}
+                    </p>
+                    <div class="user-info">
+                        <div class="avatar">${item.modelName.substring(0, 2).toUpperCase()}</div>
+                        <span class="name">${item.modelFormat}</span>
+                    </div>
+                    <button class="btn btn-primary mt-3 deploy-btn" data-model-name="${item.modelName}">Deploy</button>
                 </div>
             `;
             container.appendChild(card);
+        });
+
+        // Add event listeners to deploy buttons
+        document.querySelectorAll('.deploy-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => deployModel(e.target.dataset.modelName));
         });
     }
 
     function filterModels() {
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        const cards = document.querySelectorAll('#models-container .col-md-4');
-        cards.forEach(card => {
-            const title = card.querySelector('.card-title').textContent.toLowerCase();
-            const description = card.querySelector('.card-text').textContent.toLowerCase();
-            if (title.includes(searchTerm) || description.includes(searchTerm)) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
-        });
+        const filteredModels = models.filter(model => 
+            model.modelName.toLowerCase().includes(searchTerm) || 
+            model.namespace.toLowerCase().includes(searchTerm)
+        );
+        createModelCards(filteredModels);
     }
 
-    const k8sDomain = getK8sDomain();
-    fetch(`/api/ai-applications?domain=${encodeURIComponent(k8sDomain)}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            return response.json();
-        })
-        .then(data => {
-            createModelCards(data);
-            document.getElementById('modelSearch').addEventListener('input', filterModels);
-        })
-        .catch(error => {
-            console.error('Error fetching model data:', error);
-            document.getElementById('models-container').innerHTML = `
-                <div class="col-12">
-                    <div class="alert alert-danger" role="alert">
-                        Error loading models. Please try again later. Details: ${error.message}
-                    </div>
-                </div>
-            `;
-        });
+    function showAddModelForm() {
+        document.getElementById('models-container').style.display = 'none';
+        document.getElementById('add-model-form').style.display = 'block';
+        document.getElementById('modelSearch').style.display = 'none';
+        document.getElementById('addModelBtn').style.display = 'none';
+    }
+
+    function hideAddModelForm() {
+        document.getElementById('models-container').style.display = 'flex';
+        document.getElementById('add-model-form').style.display = 'none';
+        document.getElementById('modelSearch').style.display = 'block';
+        document.getElementById('addModelBtn').style.display = 'block';
+        document.getElementById('newModelForm').reset();
+    }
+
+    function saveNewModel(e) {
+        e.preventDefault();
+        const newModel = {
+            modelName: document.getElementById('modelName').value,
+            namespace: document.getElementById('namespace').value,
+            containerImage: document.getElementById('containerImage').value,
+            modelFormat: document.getElementById('modelFormat').value,
+            runtime: document.getElementById('runtime').value,
+            storageUri: document.getElementById('storageUri').value,
+            cpuLimit: document.getElementById('cpuLimit').value,
+            memoryLimit: document.getElementById('memoryLimit').value,
+            gpuLimit: document.getElementById('gpuLimit').value,
+            addedDate: new Date().toISOString()
+        };
+        models.push(newModel);
+        localStorage.setItem('models', JSON.stringify(models));
+        hideAddModelForm();
+        createModelCards(models);
+    }
+
+    function deployModel(modelName) {
+        const model = models.find(m => m.modelName === modelName);
+        if (!model) return;
+
+        const inferenceYaml = `
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  annotations:
+    autoscaling.knative.dev/target: "10"
+  name: ${model.modelName}
+spec:
+  predictor:
+    minReplicas: 1
+    model:
+      modelFormat:
+        name: ${model.modelFormat}
+      resources:
+        limits:
+          cpu: ${model.cpuLimit}
+          memory: ${model.memoryLimit}Gi
+          nvidia.com/gpu: ${model.gpuLimit}
+        requests:
+          cpu: ${Math.ceil(model.cpuLimit / 2)}
+          memory: ${Math.ceil(model.memoryLimit / 2)}Gi
+          nvidia.com/gpu: ${model.gpuLimit}
+      runtime: ${model.runtime}
+      storageUri: ${model.storageUri}
+`;
+
+        const runtimeYaml = `
+apiVersion: serving.kserve.io/v1alpha1
+kind: ClusterServingRuntime
+metadata:
+  name: ${model.runtime}
+spec:
+  annotations:
+    prometheus.kserve.io/path: /metrics
+    prometheus.kserve.io/port: "8000"
+    serving.kserve.io/enable-metric-aggregation: "true"
+    serving.kserve.io/enable-prometheus-scraping: "true"
+  containers:
+  - env:
+    - name: NIM_CACHE_PATH
+      value: /mnt/models
+    image: ${model.containerImage}
+    name: kserve-container
+    ports:
+    - containerPort: 8000
+      protocol: TCP
+    resources:
+      limits:
+        cpu: "${model.cpuLimit}"
+        memory: ${model.memoryLimit}Gi
+      requests:
+        cpu: "${Math.ceil(model.cpuLimit / 2)}"
+        memory: ${Math.ceil(model.memoryLimit / 2)}Gi
+    volumeMounts:
+    - mountPath: /dev/shm
+      name: dshm
+  protocolVersions:
+  - v2
+  - grpc-v2
+  supportedModelFormats:
+  - autoSelect: true
+    name: ${model.modelFormat}
+    version: "1.0.3"
+  volumes:
+  - emptyDir:
+      medium: Memory
+      sizeLimit: ${Math.ceil(model.memoryLimit / 2)}Gi
+    name: dshm
+`;
+
+        // Here you would typically send these YAML configurations to your backend
+        // For demonstration, we'll just log them to the console
+        console.log("Deploying model:", modelName);
+        console.log("Inference YAML:", inferenceYaml);
+        console.log("Runtime YAML:", runtimeYaml);
+
+        // In a real application, you would send these to your backend:
+        // fetch('/api/deploy', {
+        //     method: 'POST',
+        //     headers: {
+        //         'Content-Type': 'application/json',
+        //     },
+        //     body: JSON.stringify({
+        //         inferenceYaml,
+        //         runtimeYaml
+        //     }),
+        // }).then(response => response.json())
+        //   .then(data => console.log('Deployment result:', data));
+    }
+
+    // Event Listeners
+    document.getElementById('modelSearch').addEventListener('input', filterModels);
+    document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
+    document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
+    document.getElementById('newModelForm').addEventListener('submit', saveNewModel);
+
+    // Load saved models on page load
+    window.addEventListener('load', () => {
+        const savedModels = localStorage.getItem('models');
+        if (savedModels) {
+            models = JSON.parse(savedModels);
+            createModelCards(models);
+        }
+    });
 </script>
 {% endblock %}
 
 {% block styles %}
 <style>
     .card {
-        transition: transform 0.2s;
+        --push: 8px;
+        min-width: 320px;
+        max-width: 320px;
+        border: 1px solid black;
+        border-radius: 12px;
+        padding: 20px;
+        background-color: white;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        cursor: pointer;
+        position: relative;
+        transition: box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
+        box-shadow: var(--push) var(--push) 0 0 black;
+        will-change: box-shadow, transform;
+        height: 100%;
     }
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    .card:active {
+        box-shadow: 0 0 0 0 black;
+        transform: translate(var(--push), var(--push));
+    }
+    .card:not(:active):hover {
+        --push: 4px;
+        box-shadow: var(--push) var(--push) 0 0 black;
+        transform: translate(var(--push), var(--push));
     }
     .image-container {
-        height: 200px;
+        background-color: SandyBrown;
+        width: 100%;
+        height: 160px;
+        border-radius: 8px;
         overflow: hidden;
     }
-    .card-img-top {
-        object-fit: cover;
+    .image {
+        background-image: url("https://cdn.dribbble.com/users/1186668/screenshots/17303363/media/bc6aa9915a58811524bbbfd89cbb2d71.jpg");
+        background-position: center;
+        background-size: 100%;
+        background-repeat: no-repeat;
         height: 100%;
         width: 100%;
     }
-    .card-body {
+    .tag {
+        background-color: SandyBrown;
+        align-self: flex-start;
+        border-radius: 4px;
+        padding: 8px 10px;
+        font-size: 12px;
+        font-weight: bold;
+        letter-spacing: 0.25px;
+    }
+    .card h1 {
+        margin: 8px 0;
+        font-size: 20px;
+    }
+    .publication-date {
+        font-size: 14px;
+        color: rgba(0, 0, 0, 0.75);
+    }
+    .card p {
+        margin: 0;
+        font-size: 14px;
+        color: rgba(0, 0, 0, 0.65);
+        line-height: 1.5;
+    }
+    .user-info {
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
     }
-    .card-text {
-        flex-grow: 1;
+    .avatar {
+        background-color: black;
+        border-radius: 50%;
+        height: 28px;
+        width: 28px;
+        font-size: 8px;
+        color: sandybrown;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
     }
-    .btn-group {
-        margin-top: 10px;
+    .name {
+        font-weight: bold;
+        font-size: 12px;
+    }
+    #models-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: start;
+    }
+    .col-md-4 {
+        display: flex;
+        justify-content: center;
+    }
+    .deploy-btn {
+        width: 100%;
     }
 </style>
 {% endblock %}

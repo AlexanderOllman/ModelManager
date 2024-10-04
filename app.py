@@ -1,7 +1,7 @@
 from flask import Flask, render_template, jsonify, request
 import subprocess
 import json
-import requests
+import yaml
 
 app = Flask(__name__)
 
@@ -37,19 +37,26 @@ def get_clusterservingruntime():
     csr_data = run_kubectl_command("kubectl get clusterservingruntime -A -o json")
     return jsonify(json.loads(csr_data))
 
-@app.route('/api/ai-applications')
-def get_ai_applications():
-    domain = request.args.get('domain')
-    if not domain:
-        return jsonify({"error": "Domain parameter is required"}), 400
-    
-    url = f"https://home.{domain}/api/v1/ai-applications"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        return jsonify(response.json())
-    except requests.RequestException as e:
-        return jsonify({"error": str(e)}), 500
+@app.route('/api/deploy', methods=['POST'])
+def deploy_model():
+    data = request.json
+    inference_yaml = yaml.safe_load(data['inferenceYaml'])
+    runtime_yaml = yaml.safe_load(data['runtimeYaml'])
+
+    # Save YAML files
+    with open('inference.yaml', 'w') as f:
+        yaml.dump(inference_yaml, f)
+    with open('runtime.yaml', 'w') as f:
+        yaml.dump(runtime_yaml, f)
+
+    # Apply YAML files using kubectl
+    inference_result = run_kubectl_command("kubectl apply -f inference.yaml")
+    runtime_result = run_kubectl_command("kubectl apply -f runtime.yaml")
+
+    return jsonify({
+        'inference_result': inference_result,
+        'runtime_result': runtime_result
+    })
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port='8080')
