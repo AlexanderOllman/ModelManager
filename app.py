@@ -173,12 +173,12 @@ def delete_resource(resource_type, resource_name):
     elif resource_type == 'csr':
         command = f"kubectl delete clusterservingruntime {resource_name}"
     else:
-        return jsonify({'error': 'Invalid resource type'}), 400
+        return jsonify({'success': False, 'error': 'Invalid resource type'}), 400
 
-    result, error = run_kubectl_command(command)
+    output, error = run_kubectl_command(command)
     if error:
-        return jsonify({'success': False, 'error': error}), 400
-    return jsonify({'success': True, 'message': f"{resource_type.upper()} {resource_name} deleted successfully"})
+        return jsonify({'success': False, 'error': error}), 500
+    return jsonify({'success': True, 'message': f'{resource_type.upper()} {resource_name} deleted successfully'})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')

@@ -62,8 +62,6 @@
         data.items.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
-            const readyCondition = item.status.conditions.find(c => c.type === 'Ready');
-            const isReady = readyCondition && readyCondition.status === 'True';
             card.innerHTML = `
                 <div class="card">
                     <button type="button" class="btn-close position-absolute top-0 end-0 m-2" aria-label="Delete" data-model-name="${item.metadata.name}" data-model-namespace="${item.metadata.namespace}"></button>
@@ -71,7 +69,7 @@
                         <div class="image"></div>
                     </div>
                     <div class="tag">
-                        <span>${isReady ? 'Ready' : 'Not Ready'}</span>
+                        <span>${item.status.conditions.find(c => c.type === 'Ready').status === 'True' ? 'Ready' : 'Not Ready'}</span>
                     </div>
                     <div class="publication-date">
                         <span>Deployed ${new Date(item.metadata.creationTimestamp).toLocaleString()}</span>
@@ -80,7 +78,7 @@
                     <p>
                         Namespace: ${item.metadata.namespace}<br>
                         URL: ${item.status.url}
-                        <i class="fas fa-copy" onclick="copyToClipboard('${item.status.url}', event)" style="cursor: pointer;"></i>
+                        <i class="fas fa-copy" onclick="copyToClipboard('${item.status.url}')" style="cursor: pointer;"></i>
                     </p>
                     <div class="user-info">
                         <div class="avatar">${item.metadata.name.substring(0, 2).toUpperCase()}</div>
@@ -97,20 +95,6 @@
         });
     }
 
-    function filterModels() {
-        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        const cards = document.querySelectorAll('#models-container .col-md-4');
-        cards.forEach(card => {
-            const name = card.querySelector('h1').textContent.toLowerCase();
-            const namespace = card.querySelector('p').textContent.toLowerCase();
-            if (name.includes(searchTerm) || namespace.includes(searchTerm)) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
-        });
-    }
-
     function showDeleteConfirmation(modelName, namespace) {
         const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
         modal.show();
@@ -122,21 +106,18 @@
     }
 
     function deleteModel(modelName, namespace) {
-        fetch('/api/delete-model', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                modelName,
-                namespace
-            }),
-        }).then(response => response.json())
-          .then(result => {
-              console.log('Delete result:', result);
-              // Refresh the model list
-              fetchModels();
-          });
+        fetch(`/api/delete/isvc/${modelName}?namespace=${namespace}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(result => {
+            if (result.success) {
+                alert('Model deleted successfully');
+                fetchModels();
+            } else {
+                alert('Failed to delete model: ' + result.error);
+            }
+        });
     }
 
     function fetchModels() {
@@ -144,7 +125,6 @@
             .then(response => response.json())
             .then(data => createModelCards(data));
     }
-
     // Event Listeners
     document.getElementById('modelSearch').addEventListener('input', filterModels);
 
