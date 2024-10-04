@@ -1,3 +1,5 @@
 flask
 kubernetes
 requests
+flask-socketio 
+eventlet
