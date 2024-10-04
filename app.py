@@ -95,6 +95,7 @@ def deploy_without_runtime_update(data=None, update=False):
         runtime_result = "Update not needed."
 
     # Apply inference YAML
+    
     inference_result, inference_error = run_kubectl_command(f"kubectl apply -f inference.yaml -n {namespace}")
 
     if inference_error:
