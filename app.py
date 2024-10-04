@@ -63,12 +63,12 @@ def deploy_with_runtime_update():
 
     # Delete existing runtime
     run_kubectl_command(f"kubectl delete clusterservingruntime {runtime_name}")
-
+    
     # Deploy updated runtime and inference service
-    return deploy_without_runtime_update(data)
+    return deploy_without_runtime_update(data, update=True)
 
 @app.route('/api/deploy/without-runtime-update', methods=['POST'])
-def deploy_without_runtime_update(data=None):
+def deploy_without_runtime_update(data=None, update=False):
     if data is None:
         data = request.json
 
@@ -82,14 +82,17 @@ def deploy_without_runtime_update(data=None):
     with open('runtime.yaml', 'w') as f:
         yaml.dump(runtime_yaml, f)
 
-    # Apply runtime YAML
-    runtime_result, runtime_error = run_kubectl_command(f"kubectl apply -f runtime.yaml")
+    if update:
+        # Apply runtime YAML
+        runtime_result, runtime_error = run_kubectl_command(f"kubectl apply -f runtime.yaml")
 
-    if runtime_error:
-        return jsonify({
-            'success': False,
-            'error': f"Failed to deploy runtime: {runtime_error}"
-        })
+        if runtime_error:
+            return jsonify({
+                'success': False,
+                'error': f"Failed to deploy runtime: {runtime_error}"
+            })
+    else:
+        runtime_result = "Update not needed."
 
     # Apply inference YAML
     inference_result, inference_error = run_kubectl_command(f"kubectl apply -f inference.yaml -n {namespace}")
