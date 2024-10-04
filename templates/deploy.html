@@ -54,6 +54,25 @@
         <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
     </form>
 </div>
+
+<!-- Runtime Update Modal -->
+<div class="modal fade" id="runtimeUpdateModal" tabindex="-1" aria-labelledby="runtimeUpdateModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="runtimeUpdateModalLabel">Update Existing Runtime?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        A ClusterServingRuntime with this name already exists. Do you want to update it?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="dontUpdateRuntime">Don't Update</button>
+        <button type="button" class="btn btn-primary" id="updateRuntime">Update</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -216,13 +235,6 @@ spec:
     name: dshm
 `;
 
-        // Here you would typically send these YAML configurations to your backend
-        // For demonstration, we'll just log them to the console
-        console.log("Deploying model:", modelName);
-        console.log("Inference YAML:", inferenceYaml);
-        console.log("Runtime YAML:", runtimeYaml);
-
-        // In a real application, you would send these to your backend:
         fetch('/api/deploy', {
             method: 'POST',
             headers: {
@@ -230,10 +242,58 @@ spec:
             },
             body: JSON.stringify({
                 inferenceYaml,
-                runtimeYaml
+                runtimeYaml,
+                modelName: model.modelName,
+                runtime: model.runtime,
+                namespace: model.namespace
             }),
         }).then(response => response.json())
-          .then(data => console.log('Deployment result:', data));
+          .then(data => {
+              if (data.runtimeExists) {
+                  const modal = new bootstrap.Modal(document.getElementById('runtimeUpdateModal'));
+                  modal.show();
+
+                  document.getElementById('updateRuntime').onclick = () => {
+                      modal.hide();
+                      deployWithRuntimeUpdate(data.deploymentData);
+                  };
+
+                  document.getElementById('dontUpdateRuntime').onclick = () => {
+                      modal.hide();
+                      deployWithoutRuntimeUpdate(data.deploymentData);
+                  };
+              } else {
+                  deployWithoutRuntimeUpdate(data);
+              }
+          });
+    }
+
+    function deployWithRuntimeUpdate(data) {
+        fetch('/api/deploy/update-runtime', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        }).then(response => response.json())
+          .then(result => {
+              console.log('Deployment result:', result);
+              alert(result.success ? 'Model deployed successfully!' : 'Deployment failed. Please check the console for details.');
+          });
+    }
+
+    function deployWithoutRuntimeUpdate(data) {
+        fetch('/api/deploy/without-runtime-update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        }).then(response => response.json())
+          .then(result => {
+              console.log('Deployment result:', result);
+              alert(result.success ? 'Model deployed successfully!' : 'Deployment failed. Please check the console for details.');
+          });
     }
 
     // Event Listeners
@@ -353,6 +413,19 @@ spec:
     }
     .deploy-btn {
         width: 100%;
+    }
+    #add-model-form {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .form-label {
+        font-weight: bold;
+    }
+    .btn-close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1;
     }
 </style>
 {% endblock %}
