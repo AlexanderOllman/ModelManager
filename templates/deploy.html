@@ -262,6 +262,10 @@ spec:
     name: dshm
 `;
 
+        console.log("Deploying model:", modelName);
+        console.log("Inference YAML:", inferenceYaml);
+        console.log("Runtime YAML:", runtimeYaml);
+
         fetch('/api/deploy', {
             method: 'POST',
             headers: {
