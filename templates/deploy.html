@@ -55,20 +55,16 @@
     </form>
 </div>
 
-<!-- Runtime Update Modal -->
-<div class="modal fade" id="runtimeUpdateModal" tabindex="-1" aria-labelledby="runtimeUpdateModalLabel" aria-hidden="true">
+<!-- Deployment Status Modal -->
+<div class="modal fade" id="deploymentStatusModal" tabindex="-1" aria-labelledby="deploymentStatusModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="runtimeUpdateModalLabel">Update Existing Runtime?</h5>
+        <h5 class="modal-title" id="deploymentStatusModalLabel">Deployment Status</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body">
-        A ClusterServingRuntime with this name already exists. Do you want to update it?
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="dontUpdateRuntime">Don't Update</button>
-        <button type="button" class="btn btn-primary" id="updateRuntime">Update</button>
+      <div class="modal-body" id="deploymentStatusBody">
+        <p>Deployment in progress...</p>
       </div>
     </div>
   </div>
@@ -95,8 +91,18 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
 <script>
     let models = [];
+    const socket = io();
+
+    socket.on('deployment_status', function(data) {
+        const statusBody = document.getElementById('deploymentStatusBody');
+        const statusMessage = document.createElement('p');
+        statusMessage.textContent = data.message;
+        statusMessage.classList.add(data.status);
+        statusBody.appendChild(statusMessage);
+    });
 
     function createModelCards(data) {
         const container = document.getElementById('models-container');
@@ -192,6 +198,10 @@
         const model = models.find(m => m.modelName === modelName);
         if (!model) return;
 
+        const deploymentStatusModal = new bootstrap.Modal(document.getElementById('deploymentStatusModal'));
+        deploymentStatusModal.show();
+        document.getElementById('deploymentStatusBody').innerHTML = '<p>Starting deployment process...</p>';
+
         const inferenceYaml = `
 apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
@@ -280,45 +290,14 @@ spec:
             }),
         }).then(response => response.json())
           .then(data => {
-              if (data.runtimeExists) {
-                  const modal = new bootstrap.Modal(document.getElementById('runtimeUpdateModal'));
-                  modal.show();
-
-                  document.getElementById('updateRuntime').onclick = () => {
-                      modal.hide();
-                      deployWithRuntimeUpdate(data.deploymentData);
-                  };
-
-                  document.getElementById('dontUpdateRuntime').onclick = () => {
-                      modal.hide();
-                      deployWithoutRuntimeUpdate(data.deploymentData);
-                  };
-              } else {
-                  deployWithoutRuntimeUpdate(data);
+              if (data.status === 'error') {
+                  const statusBody = document.getElementById('deploymentStatusBody');
+                  const errorMessage = document.createElement('p');
+                  errorMessage.textContent = data.message;
+                  errorMessage.classList.add('error');
+                  statusBody.appendChild(errorMessage);
               }
           });
-    }
-
-    function deployWithRuntimeUpdate(data) {
-        fetch('/api/deploy/update-runtime', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
-        }).then(response => response.json())
-          .then(result => console.log('Deployment result:', result));
-    }
-
-    function deployWithoutRuntimeUpdate(data) {
-        fetch('/api/deploy/without-runtime-update', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
-        }).then(response => response.json())
-          .then(result => console.log('Deployment result:', result));
     }
 
     function showDeleteConfirmation(modelName) {
@@ -455,6 +434,15 @@ spec:
     .deploy-btn, .delete-btn {
         flex: 1;
         margin: 0 5px;
+    }
+    .info {
+        color: blue;
+    }
+    .success {
+        color: green;
+    }
+    .error {
+        color: red;
     }
 </style>
 {% endblock %}
