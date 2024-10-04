@@ -87,6 +87,30 @@ def get_clusterservingruntime():
     csr_data, _ = run_kubectl_command("kubectl get clusterservingruntime -A -o json")
     return jsonify(json.loads(csr_data))
 
+@app.route('/api/namespaces')
+def get_namespaces():
+    namespaces_data, _ = run_kubectl_command("kubectl get namespaces -o json")
+    namespaces_json = json.loads(namespaces_data)
+    return jsonify([item['metadata']['name'] for item in namespaces_json['items']])
+
+@app.route('/api/gpu-info')
+def get_gpu_info():
+    gpu_info_command = """
+    kubectl get nodes -o json | jq '
+      .items[] 
+      | select(.status.allocatable."nvidia.com/gpu" != null and .status.allocatable."nvidia.com/gpu" != "0")
+      | {
+          nodeName: .metadata.name,
+          gpuCount: .status.allocatable."nvidia.com/gpu",
+          gpuModel: (.metadata.labels."nvidia.com/gpu.product" // "N/A"),
+          gpuMemory: (.metadata.labels."nvidia.com/gpu.memory" // "N/A")
+        }
+    '
+    """
+    gpu_info_data, _ = run_kubectl_command(gpu_info_command)
+    gpu_info_list = [json.loads(line) for line in gpu_info_data.strip().split('\n') if line.strip()]
+    return jsonify(gpu_info_list)
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
     global deployment_in_progress
@@ -122,24 +146,39 @@ def deploy_model():
         deployment_in_progress = False
         return jsonify({'status': 'error', 'message': 'Inference service deployment failed.'})
 
-@app.route('/api/delete-model', methods=['POST'])
-def delete_model():
-    data = request.json
-    model_name = data['modelName']
-    namespace = data['namespace']
+@app.route('/api/describe/<resource_type>/<resource_name>')
+def describe_resource(resource_type, resource_name):
+    namespace = request.args.get('namespace')
+    if resource_type == 'isvc':
+        command = f"kubectl describe inferenceservice {resource_name}"
+        if namespace:
+            command += f" -n {namespace}"
+    elif resource_type == 'csr':
+        command = f"kubectl describe clusterservingruntime {resource_name}"
+    else:
+        return jsonify({'error': 'Invalid resource type'}), 400
 
-    result, error = run_kubectl_command(f"kubectl delete isvc {model_name} -n {namespace}")
-
+    description, error = run_kubectl_command(command)
     if error:
-        return jsonify({
-            'success': False,
-            'error': f"Failed to delete model: {error}"
-        })
+        return jsonify({'error': error}), 400
+    return jsonify({'description': description})
 
-    return jsonify({
-        'success': True,
-        'result': result
-    })
+@app.route('/api/delete/<resource_type>/<resource_name>', methods=['DELETE'])
+def delete_resource(resource_type, resource_name):
+    namespace = request.args.get('namespace')
+    if resource_type == 'isvc':
+        command = f"kubectl delete inferenceservice {resource_name}"
+        if namespace:
+            command += f" -n {namespace}"
+    elif resource_type == 'csr':
+        command = f"kubectl delete clusterservingruntime {resource_name}"
+    else:
+        return jsonify({'error': 'Invalid resource type'}), 400
+
+    result, error = run_kubectl_command(command)
+    if error:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, 'message': f"{resource_type.upper()} {resource_name} deleted successfully"})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')

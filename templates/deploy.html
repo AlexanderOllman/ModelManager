@@ -14,57 +14,95 @@
 <div id="add-model-form" class="mt-4" style="display: none;">
     <h3>Add New Model</h3>
     <form id="newModelForm">
+        <h4>Model Details</h4>
         <div class="mb-3">
             <label for="modelName" class="form-label">Model Name</label>
             <input type="text" class="form-control" id="modelName" required>
         </div>
         <div class="mb-3">
-            <label for="namespace" class="form-label">Namespace</label>
-            <input type="text" class="form-control" id="namespace" required>
-        </div>
-        <div class="mb-3">
-            <label for="containerImage" class="form-label">Container Image Path</label>
+            <label for="containerImage" class="form-label">Container Path</label>
             <input type="text" class="form-control" id="containerImage" required>
         </div>
         <div class="mb-3">
-            <label for="modelFormat" class="form-label">Model Format</label>
-            <input type="text" class="form-control" id="modelFormat" required>
-        </div>
-        <div class="mb-3">
-            <label for="runtime" class="form-label">Runtime</label>
-            <input type="text" class="form-control" id="runtime" required>
-        </div>
-        <div class="mb-3">
             <label for="storageUri" class="form-label">Storage URI</label>
-            <input type="text" class="form-control" id="storageUri" required>
+            <input type="text" class="form-control" id="storageUri" value="pvc://models-pvc" required>
+        </div>
+        <div class="mb-3">
+            <label for="namespace" class="form-label">Namespace</label>
+            <select class="form-select" id="namespace" required>
+                <option value="">Select a namespace</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label for="framework" class="form-label">Framework</label>
+            <select class="form-select" id="framework" required>
+                <option value="nvidia-nim" selected>nvidia-nim</option>
+                <option value="vllm">vllm</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+        <div class="mb-3" id="otherFrameworkField" style="display: none;">
+            <label for="otherFramework" class="form-label">Other Framework</label>
+            <input type="text" class="form-control" id="otherFramework">
+        </div>
+
+        <h4>Resources</h4>
+        <div class="mb-3">
+            <label for="modelSize" class="form-label">Model Size (in billions of parameters)</label>
+            <small class="form-text text-muted d-block">Below fields will be auto-populated with recommended resources based on size of model</small>
+            <input type="number" class="form-control" id="modelSize" required>
         </div>
         <div class="mb-3">
             <label for="cpuLimit" class="form-label">CPU Limit</label>
-            <input type="number" class="form-control" id="cpuLimit" required>
+            <input type="number" class="form-control" id="cpuLimit" readonly>
         </div>
         <div class="mb-3">
             <label for="memoryLimit" class="form-label">Memory Limit (Gi)</label>
-            <input type="number" class="form-control" id="memoryLimit" required>
+            <input type="number" class="form-control" id="memoryLimit" readonly>
         </div>
         <div class="mb-3">
-            <label for="gpuLimit" class="form-label">GPU Limit</label>
-            <input type="number" class="form-control" id="gpuLimit" required>
+            <label for="gpuLimit" class="form-label">GPU</label>
+            <input type="number" class="form-control" id="gpuLimit" readonly>
         </div>
+
+        <div class="mb-3">
+            <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#advancedOptions" aria-expanded="false" aria-controls="advancedOptions">
+                Advanced Options
+            </button>
+            <div class="collapse" id="advancedOptions">
+                <div class="card card-body">
+                    <div class="mb-3">
+                        <label for="quantization" class="form-label">Quantization</label>
+                        <select class="form-select" id="quantization">
+                            <option value="16" selected>FP16</option>
+                            <option value="8">FP8</option>
+                            <option value="4">FP4</option>
+                            <option value="2">FP2</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <button type="submit" class="btn btn-primary">Save Model</button>
         <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
     </form>
 </div>
 
-<!-- Deployment Status Modal -->
-<div class="modal fade" id="deploymentStatusModal" tabindex="-1" aria-labelledby="deploymentStatusModalLabel" aria-hidden="true">
+<!-- Runtime Update Modal -->
+<div class="modal fade" id="runtimeUpdateModal" tabindex="-1" aria-labelledby="runtimeUpdateModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="deploymentStatusModalLabel">Deployment Status</h5>
+        <h5 class="modal-title" id="runtimeUpdateModalLabel">Update Existing Runtime?</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-      <div class="modal-body" id="deploymentStatusBody">
-        <p>Deployment in progress...</p>
+      <div class="modal-body">
+        A ClusterServingRuntime with this name already exists. Do you want to update it?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="dontUpdateRuntime">Don't Update</button>
+        <button type="button" class="btn btn-primary" id="updateRuntime">Update</button>
       </div>
     </div>
   </div>
@@ -88,21 +126,28 @@
     </div>
   </div>
 </div>
+
+<!-- Deployment Status Modal -->
+<div class="modal fade" id="deploymentStatusModal" tabindex="-1" aria-labelledby="deploymentStatusModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deploymentStatusModalLabel">Deployment Status</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="deploymentStatusBody">
+        <p>Deployment in progress...</p>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
 <script>
     let models = [];
-    const socket = io();
-
-    socket.on('deployment_status', function(data) {
-        const statusBody = document.getElementById('deploymentStatusBody');
-        const statusMessage = document.createElement('p');
-        statusMessage.textContent = data.message;
-        statusMessage.classList.add(data.status);
-        statusBody.appendChild(statusMessage);
-    });
+    let gpuInfo = [];
 
     function createModelCards(data) {
         const container = document.getElementById('models-container');
@@ -164,6 +209,8 @@
         document.getElementById('add-model-form').style.display = 'block';
         document.getElementById('modelSearch').style.display = 'none';
         document.getElementById('addModelBtn').style.display = 'none';
+        fetchNamespaces();
+        fetchGPUInfo();
     }
 
     function hideAddModelForm() {
@@ -174,18 +221,81 @@
         document.getElementById('newModelForm').reset();
     }
 
+    function fetchNamespaces() {
+        fetch('/api/namespaces')
+            .then(response => response.json())
+            .then(data => {
+                const namespaceSelect = document.getElementById('namespace');
+                namespaceSelect.innerHTML = '<option value="">Select a namespace</option>';
+                data.forEach(namespace => {
+                    const option = document.createElement('option');
+                    option.value = namespace;
+                    option.textContent = namespace;
+                    namespaceSelect.appendChild(option);
+                });
+            });
+    }
+
+    function fetchGPUInfo() {
+        fetch('/api/gpu-info')
+            .then(response => response.json())
+            .then(data => {
+                gpuInfo = data;
+            });
+    }
+
+    function calculateResources() {
+        const modelSize = parseFloat(document.getElementById('modelSize').value);
+        const quantization = parseInt(document.getElementById('quantization').value);
+
+        if (isNaN(modelSize) || modelSize <= 0) {
+            return;
+        }
+
+        // Calculate CPU and Memory
+        const cpuLimit = Math.ceil(modelSize / 2);
+        const memoryLimit = Math.ceil(modelSize * 2);
+
+        // Calculate GPU
+        const gpuMemoryNeeded = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6; // in MB
+        let gpuLimit = 0;
+        let totalGpuMemory = 0;
+
+        for (const node of gpuInfo) {
+            const nodeGpuMemory = parseInt(node.gpuMemory) * parseInt(node.gpuCount);
+            totalGpuMemory += nodeGpuMemory;
+            if (totalGpuMemory >= gpuMemoryNeeded) {
+                gpuLimit = Math.ceil(gpuMemoryNeeded / parseInt(node.gpuMemory));
+                break;
+            }
+        }
+
+        if (gpuLimit === 0 && totalGpuMemory > 0) {
+            gpuLimit = Math.ceil(gpuMemoryNeeded / totalGpuMemory);
+        }
+
+        document.getElementById('cpuLimit').value = cpuLimit;
+        document.getElementById('memoryLimit').value = memoryLimit;
+        document.getElementById('gpuLimit').value = gpuLimit;
+    }
+
     function saveNewModel(e) {
         e.preventDefault();
+        const framework = document.getElementById('framework').value;
+        const modelName = document.getElementById('modelName').value;
         const newModel = {
-            modelName: document.getElementById('modelName').value,
+            modelName: modelName,
             namespace: document.getElementById('namespace').value,
             containerImage: document.getElementById('containerImage').value,
-            modelFormat: document.getElementById('modelFormat').value,
-            runtime: document.getElementById('runtime').value,
             storageUri: document.getElementById('storageUri').value,
+            framework: framework === 'other' ? document.getElementById('otherFramework').value : framework,
+            modelSize: document.getElementById('modelSize').value,
             cpuLimit: document.getElementById('cpuLimit').value,
             memoryLimit: document.getElementById('memoryLimit').value,
             gpuLimit: document.getElementById('gpuLimit').value,
+            quantization: document.getElementById('quantization').value,
+            modelFormat: `${framework === 'other' ? document.getElementById('otherFramework').value : framework}-${modelName}`,
+            runtime: `${framework === 'other' ? document.getElementById('otherFramework').value : framework}-${modelName}-runtime`,
             addedDate: new Date().toISOString()
         };
         models.push(newModel);
@@ -272,10 +382,6 @@ spec:
     name: dshm
 `;
 
-        console.log("Deploying model:", modelName);
-        console.log("Inference YAML:", inferenceYaml);
-        console.log("Runtime YAML:", runtimeYaml);
-
         fetch('/api/deploy', {
             method: 'POST',
             headers: {
@@ -316,11 +422,27 @@ spec:
         createModelCards(models);
     }
 
+    // Socket.IO setup
+    const socket = io();
+    socket.on('deployment_status', function(data) {
+        const statusBody = document.getElementById('deploymentStatusBody');
+        const statusMessage = document.createElement('p');
+        statusMessage.textContent = data.message;
+        statusMessage.classList.add(data.status);
+        statusBody.appendChild(statusMessage);
+    });
+
     // Event Listeners
     document.getElementById('modelSearch').addEventListener('input', filterModels);
     document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
     document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
     document.getElementById('newModelForm').addEventListener('submit', saveNewModel);
+    document.getElementById('modelSize').addEventListener('input', calculateResources);
+    document.getElementById('quantization').addEventListener('change', calculateResources);
+    document.getElementById('framework').addEventListener('change', function() {
+        const otherFrameworkField = document.getElementById('otherFrameworkField');
+        otherFrameworkField.style.display = this.value === 'other' ? 'block' : 'none';
+    });
 
     // Load saved models on page load
     window.addEventListener('load', () => {
