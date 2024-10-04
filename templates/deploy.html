@@ -223,17 +223,17 @@ spec:
         console.log("Runtime YAML:", runtimeYaml);
 
         // In a real application, you would send these to your backend:
-        // fetch('/api/deploy', {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //     },
-        //     body: JSON.stringify({
-        //         inferenceYaml,
-        //         runtimeYaml
-        //     }),
-        // }).then(response => response.json())
-        //   .then(data => console.log('Deployment result:', data));
+        fetch('/api/deploy', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                inferenceYaml,
+                runtimeYaml
+            }),
+        }).then(response => response.json())
+          .then(data => console.log('Deployment result:', data));
     }
 
     // Event Listeners
