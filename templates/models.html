@@ -56,6 +56,7 @@
         });
     }
 
+
     function createModelCards(data) {
         const container = document.getElementById('models-container');
         container.innerHTML = '';
@@ -125,6 +126,21 @@
             .then(response => response.json())
             .then(data => createModelCards(data));
     }
+
+    function filterModels() {
+        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+        const cards = document.querySelectorAll('#models-container .col-md-4');
+        cards.forEach(card => {
+            const name = card.querySelector('h1').textContent.toLowerCase();
+            const namespace = card.querySelector('p').textContent.toLowerCase();
+            if (name.includes(searchTerm) || namespace.includes(searchTerm)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
     // Event Listeners
     document.getElementById('modelSearch').addEventListener('input', filterModels);
 
