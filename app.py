@@ -5,6 +5,9 @@ import yaml
 import threading
 import time
 from flask_socketio import SocketIO
+import logging
+
+logging.basicConfig(level=logging.WARNING)
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -96,20 +99,21 @@ def get_namespaces():
 @app.route('/api/gpu-info')
 def get_gpu_info():
     gpu_info_command = """
-    kubectl get nodes -o json | jq '
-      .items[] 
-      | select(.status.allocatable."nvidia.com/gpu" != null and .status.allocatable."nvidia.com/gpu" != "0")
-      | {
-          nodeName: .metadata.name,
-          gpuCount: .status.allocatable."nvidia.com/gpu",
-          gpuModel: (.metadata.labels."nvidia.com/gpu.product" // "N/A"),
-          gpuMemory: (.metadata.labels."nvidia.com/gpu.memory" // "N/A")
-        }
-    '
+    kubectl get nodes -o custom-columns='NODE:.metadata.name,GPU_COUNT:.status.allocatable.nvidia\.com/gpu,GPU_MODEL:.metadata.labels.nvidia\.com/gpu\.product,GPU_MEMORY:.metadata.labels.nvidia\.com/gpu\.memory' | awk 'NR>1 && $2 != "<none>" && $2 != "0" {print "{\"nodeName\": \""$1"\", \"gpuCount\": \""$2"\", \"gpuModel\": \""$3"\", \"gpuMemory\": \""$4"\"}"}'
     """
-    gpu_info_data, _ = run_kubectl_command(gpu_info_command)
-    gpu_info_list = [json.loads(line) for line in gpu_info_data.strip().split('\n') if line.strip()]
-    return jsonify(gpu_info_list)
+    gpu_info_data, error = run_kubectl_command(gpu_info_command)
+    if error:
+        logging.error(f"Error fetching GPU info: {error}")
+        return jsonify([]), 500
+
+    try:
+        gpu_info_list = [json.loads(line) for line in gpu_info_data.strip().split('\n') if line.strip()]
+        logging.error(f"GPU Info: {json.dumps(gpu_info_list, indent=2)}")  # Log the result for debugging
+        return jsonify(gpu_info_list)
+    except json.JSONDecodeError as e:
+        logging.error(f"Error parsing GPU info: {e}")
+        logging.error(f"Raw GPU info data: {gpu_info_data}")
+        return jsonify([]), 500
 
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
