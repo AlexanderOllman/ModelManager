@@ -102,12 +102,12 @@ def get_gpu_info():
     kubectl get nodes -o custom-columns='NODE:.metadata.name,GPU_COUNT:.status.allocatable.nvidia\.com/gpu,GPU_MODEL:.metadata.labels.nvidia\.com/gpu\.product,GPU_MEMORY:.metadata.labels.nvidia\.com/gpu\.memory' | awk 'NR>1 && $2 != "<none>" && $2 != "0" {print "{\"nodeName\": \""$1"\", \"gpuCount\": \""$2"\", \"gpuModel\": \""$3"\", \"gpuMemory\": \""$4"\"}"}'
     """
     gpu_info_data, error = run_kubectl_command(gpu_info_command)
+    logging.error(gpu_info_data)
     if error:
         logging.error(f"Error fetching GPU info: {error}")
         return jsonify([]), 500
 
     try:
-        logging.error(gpu_info_list)
         gpu_info_list = [json.loads(line) for line in gpu_info_data.strip().split('\n') if line.strip()]
         logging.error(f"GPU Info: {json.dumps(gpu_info_list, indent=2)}")  # Log the result for debugging
         return jsonify(gpu_info_list)
