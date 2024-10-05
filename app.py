@@ -107,6 +107,7 @@ def get_gpu_info():
         return jsonify([]), 500
 
     try:
+        logging.error(gpu_info_list)
         gpu_info_list = [json.loads(line) for line in gpu_info_data.strip().split('\n') if line.strip()]
         logging.error(f"GPU Info: {json.dumps(gpu_info_list, indent=2)}")  # Log the result for debugging
         return jsonify(gpu_info_list)
