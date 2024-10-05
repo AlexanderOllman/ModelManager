@@ -271,7 +271,7 @@
         const gpuMemoryNeeded = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6; // in MB
         let gpuLimit = 0;
         let totalGpuMemory = 0;
-
+        console.log(gpuInfo);
         for (const node of gpuInfo) {
             const nodeGpuMemory = parseInt(node.gpuMemory) * parseInt(node.gpuCount);
             totalGpuMemory += nodeGpuMemory;
@@ -279,6 +279,7 @@
                 gpuLimit = Math.ceil(gpuMemoryNeeded / parseInt(node.gpuMemory));
                 break;
             }
+            console.log(totalGpuMemory);
         }
 
         if (gpuLimit === 0 && totalGpuMemory > 0) {
