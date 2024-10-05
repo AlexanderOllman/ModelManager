@@ -29,9 +29,8 @@
         </div>
         <div class="mb-3">
             <label for="namespace" class="form-label">Namespace</label>
-            <select class="form-select" id="namespace" required>
-                <option value="">Select a namespace</option>
-            </select>
+            <input type="text" class="form-control" id="namespace" autocomplete="off" required>
+            <ul id="namespaceDropdown" class="dropdown-menu" style="display: none;"></ul>
         </div>
         <div class="mb-3">
             <label for="framework" class="form-label">Framework</label>
@@ -54,15 +53,15 @@
         </div>
         <div class="mb-3">
             <label for="cpuLimit" class="form-label">CPU Limit</label>
-            <input type="number" class="form-control" id="cpuLimit" readonly>
+            <input type="number" class="form-control" id="cpuLimit">
         </div>
         <div class="mb-3">
             <label for="memoryLimit" class="form-label">Memory Limit (Gi)</label>
-            <input type="number" class="form-control" id="memoryLimit" readonly>
+            <input type="number" class="form-control" id="memoryLimit">
         </div>
         <div class="mb-3">
             <label for="gpuLimit" class="form-label">GPU</label>
-            <input type="number" class="form-control" id="gpuLimit" readonly>
+            <input type="number" class="form-control" id="gpuLimit">
         </div>
 
         <div class="mb-3">
@@ -148,6 +147,7 @@
 <script>
     let models = [];
     let gpuInfo = [];
+    let namespaces = [];
 
     function createModelCards(data) {
         const container = document.getElementById('models-container');
@@ -225,15 +225,26 @@
         fetch('/api/namespaces')
             .then(response => response.json())
             .then(data => {
-                const namespaceSelect = document.getElementById('namespace');
-                namespaceSelect.innerHTML = '<option value="">Select a namespace</option>';
-                data.forEach(namespace => {
-                    const option = document.createElement('option');
-                    option.value = namespace;
-                    option.textContent = namespace;
-                    namespaceSelect.appendChild(option);
-                });
+                namespaces = data;
+                populateNamespaceDropdown(namespaces);
             });
+    }
+
+    function populateNamespaceDropdown(namespaces, filter = '') {
+        const dropdown = document.getElementById('namespaceDropdown');
+        dropdown.innerHTML = '';
+        const filteredNamespaces = namespaces.filter(ns => ns.toLowerCase().includes(filter.toLowerCase()));
+        filteredNamespaces.forEach(ns => {
+            const li = document.createElement('li');
+            li.innerHTML = `<a class="dropdown-item" href="#">${ns}</a>`;
+            li.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                document.getElementById('namespace').value = ns;
+                dropdown.style.display = 'none';
+            });
+            dropdown.appendChild(li);
+        });
+        dropdown.style.display = filteredNamespaces.length > 0 ? 'block' : 'none';
     }
 
     function fetchGPUInfo() {
@@ -260,10 +271,9 @@
         const gpuMemoryNeeded = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6; // in MB
         let gpuLimit = 0;
         let totalGpuMemory = 0;
-        console.log(gpuInfo);
+
         for (const node of gpuInfo) {
             const nodeGpuMemory = parseInt(node.gpuMemory) * parseInt(node.gpuCount);
-            console.log(nodeGpuMemory);
             totalGpuMemory += nodeGpuMemory;
             if (totalGpuMemory >= gpuMemoryNeeded) {
                 gpuLimit = Math.ceil(gpuMemoryNeeded / parseInt(node.gpuMemory));
@@ -403,7 +413,56 @@ spec:
                   errorMessage.textContent = data.message;
                   errorMessage.classList.add('error');
                   statusBody.appendChild(errorMessage);
+              } else if (data.runtimeExists) {
+                  const modal = new bootstrap.Modal(document.getElementById('runtimeUpdateModal'));
+                  modal.show();
+
+                  document.getElementById('updateRuntime').onclick = () => {
+                      modal.hide();
+                      deployWithRuntimeUpdate(data.deploymentData);
+                  };
+
+                  document.getElementById('dontUpdateRuntime').onclick = () => {
+                      modal.hide();
+                      deployWithoutRuntimeUpdate(data.deploymentData);
+                  };
+              } else {
+                  deployWithoutRuntimeUpdate(data);
               }
+          });
+    }
+
+    function deployWithRuntimeUpdate(data) {
+        fetch('/api/deploy/update-runtime', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        }).then(response => response.json())
+          .then(result => {
+              const statusBody = document.getElementById('deploymentStatusBody');
+              const resultMessage = document.createElement('p');
+              resultMessage.textContent = `Deployment result: ${JSON.stringify(result)}`;
+              resultMessage.classList.add(result.success ? 'success' : 'error');
+              statusBody.appendChild(resultMessage);
+          });
+    }
+
+    function deployWithoutRuntimeUpdate(data) {
+        fetch('/api/deploy/without-runtime-update', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        }).then(response => response.json())
+          .then(result => {
+              const statusBody = document.getElementById('deploymentStatusBody');
+              const resultMessage = document.createElement('p');
+              resultMessage.textContent = `Deployment result: ${JSON.stringify(result)}`;
+              resultMessage.classList.add(result.success ? 'success' : 'error');
+              statusBody.appendChild(resultMessage);
           });
     }
 
@@ -423,16 +482,6 @@ spec:
         createModelCards(models);
     }
 
-    // Socket.IO setup
-    const socket = io();
-    socket.on('deployment_status', function(data) {
-        const statusBody = document.getElementById('deploymentStatusBody');
-        const statusMessage = document.createElement('p');
-        statusMessage.textContent = data.message;
-        statusMessage.classList.add(data.status);
-        statusBody.appendChild(statusMessage);
-    });
-
     // Event Listeners
     document.getElementById('modelSearch').addEventListener('input', filterModels);
     document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
@@ -445,6 +494,24 @@ spec:
         otherFrameworkField.style.display = this.value === 'other' ? 'block' : 'none';
     });
 
+    // Namespace dropdown functionality
+    const namespaceInput = document.getElementById('namespace');
+    const namespaceDropdown = document.getElementById('namespaceDropdown');
+
+    namespaceInput.addEventListener('focus', () => {
+        populateNamespaceDropdown(namespaces, namespaceInput.value);
+    });
+
+    namespaceInput.addEventListener('input', () => {
+        populateNamespaceDropdown(namespaces, namespaceInput.value);
+    });
+
+    namespaceInput.addEventListener('blur', () => {
+        setTimeout(() => {
+            namespaceDropdown.style.display = 'none';
+        }, 200);
+    });
+
     // Load saved models on page load
     window.addEventListener('load', () => {
         const savedModels = localStorage.getItem('models');
@@ -452,6 +519,16 @@ spec:
             models = JSON.parse(savedModels);
             createModelCards(models);
         }
+    });
+
+    // Socket.IO for real-time updates
+    const socket = io();
+    socket.on('deployment_status', function(data) {
+        const statusBody = document.getElementById('deploymentStatusBody');
+        const statusMessage = document.createElement('p');
+        statusMessage.textContent = data.message;
+        statusMessage.classList.add(data.status);
+        statusBody.appendChild(statusMessage);
     });
 </script>
 {% endblock %}
@@ -557,6 +634,10 @@ spec:
     .deploy-btn, .delete-btn {
         flex: 1;
         margin: 0 5px;
+    }
+    #namespaceDropdown {
+        max-height: 200px;
+        overflow-y: auto;
     }
     .info {
         color: blue;
