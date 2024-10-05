@@ -99,22 +99,21 @@ def get_namespaces():
 @app.route('/api/gpu-info')
 def get_gpu_info():
     gpu_info_command = """
-    kubectl get nodes -o custom-columns='NODE:.metadata.name,GPU_COUNT:.status.allocatable.nvidia\.com/gpu,GPU_MODEL:.metadata.labels.nvidia\.com/gpu\.product,GPU_MEMORY:.metadata.labels.nvidia\.com/gpu\.memory' | awk 'NR>1 && $2 != "<none>" && $2 != "0" {print "{\"nodeName\": \""$1"\", \"gpuCount\": \""$2"\", \"gpuModel\": \""$3"\", \"gpuMemory\": \""$4"\"}"}'
+    kubectl get nodes -o custom-columns='NODE:.metadata.name,GPU_COUNT:.status.allocatable.nvidia\.com/gpu,GPU_MODEL:.metadata.labels.nvidia\.com/gpu\.product,GPU_MEMORY:.metadata.labels.nvidia\.com/gpu\.memory' | grep -v '<none>' | grep -v ' 0 ' | sed -E 's/^([^ ]+) +([^ ]+) +([^ ]+) +([^ ]+)$/{"nodeName": "\\1", "gpuCount": "\\2", "gpuModel": "\\3", "gpuMemory": "\\4"}/'
     """
     gpu_info_data, error = run_kubectl_command(gpu_info_command)
-    logging.error(gpu_info_data)
     if error:
         logging.error(f"Error fetching GPU info: {error}")
-        return jsonify([]), 500
-
+        return jsonify([])
+    
     try:
         gpu_info_list = [json.loads(line) for line in gpu_info_data.strip().split('\n') if line.strip()]
-        logging.error(f"GPU Info: {json.dumps(gpu_info_list, indent=2)}")  # Log the result for debugging
+        logging.error(f"GPU Info: {gpu_info_list}")  # Log the result for debugging
         return jsonify(gpu_info_list)
     except json.JSONDecodeError as e:
         logging.error(f"Error parsing GPU info: {e}")
         logging.error(f"Raw GPU info data: {gpu_info_data}")
-        return jsonify([]), 500
+        return jsonify([])
 
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
