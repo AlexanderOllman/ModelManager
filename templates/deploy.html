@@ -256,6 +256,7 @@
             });
     }
 
+
     function calculateResources() {
         const modelSize = parseFloat(document.getElementById('modelSize').value);
         const quantization = parseInt(document.getElementById('quantization').value);
@@ -272,12 +273,14 @@
         const gpuMemoryNeeded = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6; // in MB
         let gpuLimit = 0;
         let totalGpuMemory = 0;
-        console.log(gpuInfo);
+
         for (const node of gpuInfo) {
-            const nodeGpuMemory = parseInt(node.gpuMemory) * parseInt(node.gpuCount);
+            const gpuCount = parseInt(node.gpuCount) || 0;
+            const gpuMemory = parseInt(node.gpuMemory) || 0;
+            const nodeGpuMemory = gpuMemory * gpuCount;
             totalGpuMemory += nodeGpuMemory;
             if (totalGpuMemory >= gpuMemoryNeeded) {
-                gpuLimit = Math.ceil(gpuMemoryNeeded / parseInt(node.gpuMemory));
+                gpuLimit = Math.ceil(gpuMemoryNeeded / gpuMemory);
                 break;
             }
             console.log(totalGpuMemory);
