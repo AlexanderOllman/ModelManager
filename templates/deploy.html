@@ -277,6 +277,8 @@
         let totalGpuMemory = 0;
 
         for (const node of gpuInfo) {
+            console.log("AAAAH");
+            console.log(node);
             const gpuCount = parseInt(node.gpuCount) || 0;
             const gpuMemory = parseInt(node.gpuMemory) || 0;
             const nodeGpuMemory = gpuMemory * gpuCount;
