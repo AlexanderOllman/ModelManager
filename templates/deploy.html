@@ -128,18 +128,23 @@
 
 <!-- Deployment Status Modal -->
 <div class="modal fade" id="deploymentStatusModal" tabindex="-1" aria-labelledby="deploymentStatusModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="deploymentStatusModalLabel">Deployment Status</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body" id="deploymentStatusBody">
-        <p>Deployment in progress...</p>
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deploymentStatusModalLabel">Deployment Status</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="deploymentStatusBody"></div>
+          <div id="deploymentSpinner" class="text-center mt-3">
+            <div class="spinner-border" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -333,7 +338,8 @@
 
         const deploymentStatusModal = new bootstrap.Modal(document.getElementById('deploymentStatusModal'));
         deploymentStatusModal.show();
-        document.getElementById('deploymentStatusBody').innerHTML = '<p>Starting deployment process...</p>';
+        document.getElementById('deploymentStatusBody').innerHTML = '';
+        document.getElementById('deploymentSpinner').style.display = 'block';
 
         const inferenceYaml = `
 apiVersion: serving.kserve.io/v1beta1
@@ -419,13 +425,15 @@ spec:
             }),
         }).then(response => response.json())
           .then(data => {
-              if (data.status === 'error') {
+            if (data.status === 'error') {
                   const statusBody = document.getElementById('deploymentStatusBody');
                   const errorMessage = document.createElement('p');
                   errorMessage.textContent = data.message;
                   errorMessage.classList.add('error');
                   statusBody.appendChild(errorMessage);
-              } else if (data.runtimeExists) {
+                  document.getElementById('deploymentSpinner').style.display = 'none';
+              } 
+              else if (data.runtimeExists) {
                   const modal = new bootstrap.Modal(document.getElementById('runtimeUpdateModal'));
                   modal.show();
 
@@ -541,6 +549,14 @@ spec:
         statusMessage.textContent = data.message;
         statusMessage.classList.add(data.status);
         statusBody.appendChild(statusMessage);
+
+        if (data.final) {
+            document.getElementById('deploymentSpinner').style.display = 'none';
+            if (data.status === 'success') {
+                statusMessage.style.color = 'green';
+                statusMessage.style.fontWeight = 'bold';
+            }
+        }
     });
 </script>
 {% endblock %}

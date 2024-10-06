@@ -9,6 +9,9 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="csr-tab" data-bs-toggle="tab" data-bs-target="#csr" type="button" role="tab" aria-controls="csr" aria-selected="false">ClusterServingRuntime</button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="pods-tab" data-bs-toggle="tab" data-bs-target="#pods" type="button" role="tab" aria-controls="pods" aria-selected="false">Pods</button>
+    </li>
 </ul>
 <div class="tab-content" id="manageTabsContent">
     <div class="tab-pane fade show active" id="isvc" role="tabpanel" aria-labelledby="isvc-tab">
@@ -20,6 +23,13 @@
     </div>
     <div class="tab-pane fade" id="csr" role="tabpanel" aria-labelledby="csr-tab">
         <div id="csr-container" class="mt-4">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="pods" role="tabpanel" aria-labelledby="pods-tab">
+        <div id="pods-container" class="mt-4">
             <div class="spinner-border" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
@@ -56,6 +66,21 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-danger" id="confirmDelete">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pod Logs Modal -->
+<div class="modal fade" id="podLogsModal" tabindex="-1" aria-labelledby="podLogsModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="podLogsModalLabel">Pod Logs</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <pre id="podLogsContent"></pre>
       </div>
     </div>
   </div>
@@ -233,6 +258,70 @@
         });
     }
 
+    function createPodsTable(data, containerId) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        if (data.items.length === 0) {
+            container.innerHTML = '<p>No pods found.</p>';
+            return;
+        }
+        const table = document.createElement('table');
+        table.className = 'table table-striped table-hover';
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        ['Name', 'Namespace', 'Status', 'Age', 'Actions'].forEach(header => {
+            const th = document.createElement('th');
+            th.textContent = header;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        data.items.forEach(item => {
+            const row = document.createElement('tr');
+            
+            // Name
+            const nameCell = document.createElement('td');
+            nameCell.textContent = item.metadata.name;
+            row.appendChild(nameCell);
+            
+            // Namespace
+            const namespaceCell = document.createElement('td');
+            namespaceCell.textContent = item.metadata.namespace;
+            row.appendChild(namespaceCell);
+            
+            // Status
+            const statusCell = document.createElement('td');
+            statusCell.textContent = item.status.phase;
+            row.appendChild(statusCell);
+            
+            // Age
+            const ageCell = document.createElement('td');
+            const creationTime = new Date(item.metadata.creationTimestamp);
+            const age = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24)); // Age in days
+            ageCell.textContent = `${age} day${age !== 1 ? 's' : ''}`;
+            row.appendChild(ageCell);
+            
+            // Actions
+            const actionsCell = document.createElement('td');
+            actionsCell.innerHTML = `
+                <button class="btn btn-sm btn-primary view-logs" data-pod-name="${item.metadata.name}" data-namespace="${item.metadata.namespace}">
+                    Logs
+                </button>
+            `;
+            row.appendChild(actionsCell);
+            
+            tbody.appendChild(row);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+
+        // Add event listeners for viewing logs
+        container.querySelectorAll('.view-logs').forEach(btn => {
+            btn.addEventListener('click', (e) => viewPodLogs(e.target.dataset.podName, e.target.dataset.namespace));
+        });
+    }
+
     function describeResource(resourceType, resourceName, namespace = null) {
         const url = namespace 
             ? `/api/describe/${resourceType}/${resourceName}?namespace=${namespace}`
@@ -274,6 +363,20 @@
             });
     }
 
+    function viewPodLogs(podName, namespace) {
+        fetch(`/api/pod-logs/${namespace}/${podName}`)
+            .then(response => response.text())
+            .then(logs => {
+                const modal = new bootstrap.Modal(document.getElementById('podLogsModal'));
+                document.getElementById('podLogsContent').textContent = logs;
+                modal.show();
+            })
+            .catch(error => {
+                console.error('Error fetching pod logs:', error);
+                alert('Failed to fetch pod logs. Please try again.');
+            });
+    }
+
     function loadIsvcData() {
         fetch('/api/isvc')
             .then(response => response.json())
@@ -286,17 +389,46 @@
             .then(data => createClusterServingRuntimeTable(data, 'csr-container'));
     }
 
+    function loadPodsData() {
+        fetch('/api/pods')
+            .then(response => response.json())
+            .then(data => createPodsTable(data, 'pods-container'));
+    }
+
     function loadData(resourceType) {
         if (resourceType === 'isvc') {
             loadIsvcData();
         } else if (resourceType === 'csr') {
             loadCsrData();
+        } else if (resourceType === 'pods') {
+            loadPodsData();
         }
     }
 
     document.getElementById('isvc-tab').addEventListener('shown.bs.tab', loadIsvcData);
     document.getElementById('csr-tab').addEventListener('shown.bs.tab', loadCsrData);
+    document.getElementById('pods-tab').addEventListener('shown.bs.tab', loadPodsData);
 
+    // Initial load
     loadIsvcData();
 </script>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .table th, .table td {
+        vertical-align: middle;
+    }
+    
+    .badge {
+        font-size: 0.9em;
+    }
+
+    #resourceDescriptionContent, #podLogsContent {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+</style>
 {% endblock %}

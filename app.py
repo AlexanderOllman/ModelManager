@@ -80,6 +80,22 @@ def manage():
 def deploy():
     return render_template('deploy.html')
 
+@app.route('/api/pods')
+def get_pods():
+    command = "kubectl get pods -A -l serving.kserve.io/inferenceservice -o json"
+    pods_data, error = run_kubectl_command(command)
+    if error:
+        return jsonify({'error': str(error)}), 500
+    return pods_data
+
+@app.route('/api/pod-logs/<namespace>/<pod_name>')
+def get_pod_logs(namespace, pod_name):
+    command = f"kubectl logs -n {namespace} {pod_name}"
+    logs, error = run_kubectl_command(command)
+    if error:
+        return str(error), 500
+    return logs
+
 @app.route('/api/isvc')
 def get_isvc():
     isvc_data, _ = run_kubectl_command("kubectl get isvc -A -o json")
@@ -183,6 +199,8 @@ def delete_resource(resource_type, resource_name):
     if error:
         return jsonify({'success': False, 'error': error}), 500
     return jsonify({'success': True, 'message': f'{resource_type.upper()} {resource_name} deleted successfully'})
+
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')
