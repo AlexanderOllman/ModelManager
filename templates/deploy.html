@@ -252,9 +252,7 @@
             .then(response => response.json())
             .then(data => {
                 gpuInfo = data;
-                console.log(gpuInfo);
-                console.log("test");
-                console.log(gpuInfo[1]);
+                console.log("Fetched GPU Info:", gpuInfo);
             });
     }
 
@@ -276,23 +274,28 @@
         let gpuLimit = 0;
         let totalGpuMemory = 0;
 
-        for (const node of gpuInfo) {
-            console.log("AAAAH");
-            console.log(node);
-            const gpuCount = parseInt(node.gpuCount) || 0;
-            const gpuMemory = parseInt(node.gpuMemory) || 0;
-            const nodeGpuMemory = gpuMemory * gpuCount;
-            totalGpuMemory += nodeGpuMemory;
-            if (totalGpuMemory >= gpuMemoryNeeded) {
-                gpuLimit = Math.ceil(gpuMemoryNeeded / gpuMemory);
-                break;
+        // Skip the first entry (headers) and process the rest
+        for (let i = 1; i < gpuInfo.length; i++) {
+            const node = gpuInfo[i];
+            const nodeGpuCount = parseInt(node.gpuCount) || 0;
+            const nodeGpuMemory = parseInt(node.gpuMemory) || 0;
+            const nodeGpuTotalMemory = nodeGpuCount * nodeGpuMemory;
+            totalGpuMemory += nodeGpuTotalMemory;
+
+            if (totalGpuMemory >= gpuMemoryNeeded && gpuLimit === 0) {
+                gpuLimit = Math.ceil(gpuMemoryNeeded / nodeGpuMemory);
             }
-            console.log(totalGpuMemory);
         }
 
         if (gpuLimit === 0 && totalGpuMemory > 0) {
             gpuLimit = Math.ceil(gpuMemoryNeeded / totalGpuMemory);
         }
+
+        console.log("GPU Calculation:", {
+            gpuMemoryNeeded,
+            totalGpuMemory,
+            gpuLimit
+        });
 
         document.getElementById('cpuLimit').value = cpuLimit;
         document.getElementById('memoryLimit').value = memoryLimit;
