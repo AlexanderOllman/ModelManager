@@ -63,6 +63,12 @@
         data.items.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
+            const modelFormat = "N/A";
+            try {
+            modelFormat = item.spec.predictor.model.modelFormat.name;
+            } catch (error) {
+            modelFormat.textContent = "N/A";
+            }
             card.innerHTML = `
                 <div class="card">
                     <button type="button" class="btn-close position-absolute top-0 end-0 m-2" aria-label="Delete" data-model-name="${item.metadata.name}" data-model-namespace="${item.metadata.namespace}"></button>
@@ -83,7 +89,7 @@
                     </p>
                     <div class="user-info">
                         <div class="avatar">${item.metadata.name.substring(0, 2).toUpperCase()}</div>
-                        <span class="name">${item.spec.predictor.model.modelFormat.name}</span>
+                        <span class="name">${ModelFormat}</span>
                     </div>
                 </div>
             `;

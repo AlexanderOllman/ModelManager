@@ -123,7 +123,11 @@
             
             // Model
             const modelCell = document.createElement('td');
+            try {
             modelCell.textContent = item.spec.predictor.model.modelFormat.name;
+            } catch (error) {
+            modelCell.textContent = "NA";
+            }
             row.appendChild(modelCell);
             
             // Resources
