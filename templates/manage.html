@@ -89,10 +89,18 @@
 
 {% block scripts %}
 <script>
+    function safeGet(obj, path, defaultValue = 'N/A') {
+        try {
+            return path.split('.').reduce((o, k) => (o || {})[k], obj) || defaultValue;
+        } catch (error) {
+            return defaultValue;
+        }
+    }
+
     function createInferenceServiceTable(data, containerId) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
-        if (data.items.length === 0) {
+        if (!data.items || data.items.length === 0) {
             container.innerHTML = '<p>No items found.</p>';
             return;
         }
@@ -112,41 +120,29 @@
             const row = document.createElement('tr');
             
             // Name
-            const nameCell = document.createElement('td');
-            nameCell.textContent = item.metadata.name;
-            row.appendChild(nameCell);
+            row.appendChild(createCell(safeGet(item, 'metadata.name')));
             
             // Namespace
-            const namespaceCell = document.createElement('td');
-            namespaceCell.textContent = item.metadata.namespace;
-            row.appendChild(namespaceCell);
+            row.appendChild(createCell(safeGet(item, 'metadata.namespace')));
             
             // Model
-            const modelCell = document.createElement('td');
-            try {
-            modelCell.textContent = item.spec.predictor.model.modelFormat.name;
-            } catch (error) {
-            modelCell.textContent = "NA";
-            }
-            row.appendChild(modelCell);
+            row.appendChild(createCell(safeGet(item, 'spec.predictor.model.modelFormat.name')));
             
             // Resources
             const resourcesCell = document.createElement('td');
-            const resources = item.spec.predictor.model.resources;
+            const resources = safeGet(item, 'spec.predictor.model.resources', {});
             resourcesCell.innerHTML = `
-                <strong>Limits:</strong> ${JSON.stringify(resources.limits)}<br>
-                <strong>Requests:</strong> ${JSON.stringify(resources.requests)}
+                <strong>Limits:</strong> ${JSON.stringify(safeGet(resources, 'limits', {}))}<br>
+                <strong>Requests:</strong> ${JSON.stringify(safeGet(resources, 'requests', {}))}
             `;
             row.appendChild(resourcesCell);
             
             // URL
-            const urlCell = document.createElement('td');
-            urlCell.textContent = item.status.url;
-            row.appendChild(urlCell);
+            row.appendChild(createCell(safeGet(item, 'status.url')));
             
             // Ready Status
             const readyCell = document.createElement('td');
-            const readyCondition = item.status.conditions.find(c => c.type === 'Ready');
+            const readyCondition = safeGet(item, 'status.conditions', []).find(c => c.type === 'Ready');
             const isReady = readyCondition && readyCondition.status === 'True';
             readyCell.innerHTML = `
                 <span class="badge ${isReady ? 'bg-success' : 'bg-danger'}">
@@ -159,12 +155,12 @@
             const actionsCell = document.createElement('td');
             actionsCell.innerHTML = `
                 <div class="dropdown">
-                    <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${item.metadata.name}" data-bs-toggle="dropdown" aria-expanded="false">
+                    <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${safeGet(item, 'metadata.name')}" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
-                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${item.metadata.name}">
-                        <li><a class="dropdown-item describe-action" href="#" data-resource-type="isvc" data-resource-name="${item.metadata.name}" data-resource-namespace="${item.metadata.namespace}">Describe</a></li>
-                        <li><a class="dropdown-item delete-action" href="#" data-resource-type="isvc" data-resource-name="${item.metadata.name}" data-resource-namespace="${item.metadata.namespace}">Delete</a></li>
+                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${safeGet(item, 'metadata.name')}">
+                        <li><a class="dropdown-item describe-action" href="#" data-resource-type="isvc" data-resource-name="${safeGet(item, 'metadata.name')}" data-resource-namespace="${safeGet(item, 'metadata.namespace')}">Describe</a></li>
+                        <li><a class="dropdown-item delete-action" href="#" data-resource-type="isvc" data-resource-name="${safeGet(item, 'metadata.name')}" data-resource-namespace="${safeGet(item, 'metadata.namespace')}">Delete</a></li>
                     </ul>
                 </div>
             `;
@@ -187,7 +183,7 @@
     function createClusterServingRuntimeTable(data, containerId) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
-        if (data.items.length === 0) {
+        if (!data.items || data.items.length === 0) {
             container.innerHTML = '<p>No items found.</p>';
             return;
         }
@@ -207,42 +203,32 @@
             const row = document.createElement('tr');
             
             // Name
-            const nameCell = document.createElement('td');
-            nameCell.textContent = item.metadata.name;
-            row.appendChild(nameCell);
+            row.appendChild(createCell(safeGet(item, 'metadata.name')));
             
             // Protocols
-            const protocolsCell = document.createElement('td');
-            const protocols = item.spec.supportedModelFormats?.[0]?.autoSelect?.protocols || [];
-            protocolsCell.textContent = protocols.join(', ');
-            row.appendChild(protocolsCell);
+            const protocols = safeGet(item, 'spec.supportedModelFormats.0.autoSelect.protocols', []);
+            row.appendChild(createCell(protocols.join(', ')));
             
             // Container Image
-            const imageCell = document.createElement('td');
-            imageCell.textContent = item.spec.containers?.[0]?.image || 'N/A';
-            row.appendChild(imageCell);
+            row.appendChild(createCell(safeGet(item, 'spec.containers.0.image')));
             
             // Supported Model Formats
-            const formatsCell = document.createElement('td');
-            const formats = item.spec.supportedModelFormats?.map(f => f.name) || [];
-            formatsCell.textContent = formats.join(', ');
-            row.appendChild(formatsCell);
+            const formats = safeGet(item, 'spec.supportedModelFormats', []).map(f => f.name || 'N/A');
+            row.appendChild(createCell(formats.join(', ')));
             
             // Created At
-            const createdCell = document.createElement('td');
-            createdCell.textContent = new Date(item.metadata.creationTimestamp).toLocaleString();
-            row.appendChild(createdCell);
+            row.appendChild(createCell(new Date(safeGet(item, 'metadata.creationTimestamp')).toLocaleString()));
             
             // Actions
             const actionsCell = document.createElement('td');
             actionsCell.innerHTML = `
                 <div class="dropdown">
-                    <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${item.metadata.name}" data-bs-toggle="dropdown" aria-expanded="false">
+                    <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${safeGet(item, 'metadata.name')}" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
-                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${item.metadata.name}">
-                        <li><a class="dropdown-item describe-action" href="#" data-resource-type="csr" data-resource-name="${item.metadata.name}">Describe</a></li>
-                        <li><a class="dropdown-item delete-action" href="#" data-resource-type="csr" data-resource-name="${item.metadata.name}">Delete</a></li>
+                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${safeGet(item, 'metadata.name')}">
+                        <li><a class="dropdown-item describe-action" href="#" data-resource-type="csr" data-resource-name="${safeGet(item, 'metadata.name')}">Describe</a></li>
+                        <li><a class="dropdown-item delete-action" href="#" data-resource-type="csr" data-resource-name="${safeGet(item, 'metadata.name')}">Delete</a></li>
                     </ul>
                 </div>
             `;
@@ -265,7 +251,7 @@
     function createPodsTable(data, containerId) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
-        if (data.items.length === 0) {
+        if (!data.items || data.items.length === 0) {
             container.innerHTML = '<p>No pods found.</p>';
             return;
         }
@@ -285,31 +271,23 @@
             const row = document.createElement('tr');
             
             // Name
-            const nameCell = document.createElement('td');
-            nameCell.textContent = item.metadata.name;
-            row.appendChild(nameCell);
+            row.appendChild(createCell(safeGet(item, 'metadata.name')));
             
             // Namespace
-            const namespaceCell = document.createElement('td');
-            namespaceCell.textContent = item.metadata.namespace;
-            row.appendChild(namespaceCell);
+            row.appendChild(createCell(safeGet(item, 'metadata.namespace')));
             
             // Status
-            const statusCell = document.createElement('td');
-            statusCell.textContent = item.status.phase;
-            row.appendChild(statusCell);
+            row.appendChild(createCell(safeGet(item, 'status.phase')));
             
             // Age
-            const ageCell = document.createElement('td');
-            const creationTime = new Date(item.metadata.creationTimestamp);
+            const creationTime = new Date(safeGet(item, 'metadata.creationTimestamp'));
             const age = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24)); // Age in days
-            ageCell.textContent = `${age} day${age !== 1 ? 's' : ''}`;
-            row.appendChild(ageCell);
+            row.appendChild(createCell(`${age} day${age !== 1 ? 's' : ''}`));
             
             // Actions
             const actionsCell = document.createElement('td');
             actionsCell.innerHTML = `
-                <button class="btn btn-sm btn-primary view-logs" data-pod-name="${item.metadata.name}" data-namespace="${item.metadata.namespace}">
+                <button class="btn btn-sm btn-primary view-logs" data-pod-name="${safeGet(item, 'metadata.name')}" data-namespace="${safeGet(item, 'metadata.namespace')}">
                     Logs
                 </button>
             `;
@@ -326,6 +304,11 @@
         });
     }
 
+    function createCell(content) {
+        const cell = document.createElement('td');
+        cell.textContent = content;
+        return cell;
+    }
     function describeResource(resourceType, resourceName, namespace = null) {
         const url = namespace 
             ? `/api/describe/${resourceType}/${resourceName}?namespace=${namespace}`
@@ -337,6 +320,10 @@
                 const modal = new bootstrap.Modal(document.getElementById('resourceDescriptionModal'));
                 document.getElementById('resourceDescriptionContent').textContent = data.description;
                 modal.show();
+            })
+            .catch(error => {
+                console.error('Error fetching resource description:', error);
+                alert('Failed to fetch resource description. Please try again.');
             });
     }
 
@@ -364,6 +351,10 @@
                 } else {
                     alert('Failed to delete resource: ' + data.error);
                 }
+            })
+            .catch(error => {
+                console.error('Error deleting resource:', error);
+                alert('An error occurred while deleting the resource. Please try again.');
             });
     }
 
@@ -384,19 +375,31 @@
     function loadIsvcData() {
         fetch('/api/isvc')
             .then(response => response.json())
-            .then(data => createInferenceServiceTable(data, 'isvc-container'));
+            .then(data => createInferenceServiceTable(data, 'isvc-container'))
+            .catch(error => {
+                console.error('Error loading InferenceService data:', error);
+                document.getElementById('isvc-container').innerHTML = '<p>Error loading data. Please try again.</p>';
+            });
     }
 
     function loadCsrData() {
         fetch('/api/clusterservingruntime')
             .then(response => response.json())
-            .then(data => createClusterServingRuntimeTable(data, 'csr-container'));
+            .then(data => createClusterServingRuntimeTable(data, 'csr-container'))
+            .catch(error => {
+                console.error('Error loading ClusterServingRuntime data:', error);
+                document.getElementById('csr-container').innerHTML = '<p>Error loading data. Please try again.</p>';
+            });
     }
 
     function loadPodsData() {
         fetch('/api/pods')
             .then(response => response.json())
-            .then(data => createPodsTable(data, 'pods-container'));
+            .then(data => createPodsTable(data, 'pods-container'))
+            .catch(error => {
+                console.error('Error loading Pods data:', error);
+                document.getElementById('pods-container').innerHTML = '<p>Error loading data. Please try again.</p>';
+            });
     }
 
     function loadData(resourceType) {
@@ -420,19 +423,15 @@
 
 {% block styles %}
 <style>
-    .table th, .table td {
-        vertical-align: middle;
+    .table {
+        font-size: 0.9rem;
     }
-    
     .badge {
-        font-size: 0.9em;
+        font-size: 0.8rem;
     }
-
     #resourceDescriptionContent, #podLogsContent {
         white-space: pre-wrap;
         word-wrap: break-word;
-        max-height: 400px;
-        overflow-y: auto;
     }
 </style>
 {% endblock %}

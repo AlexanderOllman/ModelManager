@@ -33,63 +33,47 @@
 
 {% block scripts %}
 <script>
-    function copyToClipboard(text, event) {
-        event.stopPropagation();
-        navigator.clipboard.writeText(text).then(() => {
-            const popup = document.createElement('div');
-            popup.textContent = 'URL copied!';
-            popup.style.position = 'fixed';
-            popup.style.padding = '10px';
-            popup.style.background = 'rgba(0,0,0,0.8)';
-            popup.style.color = 'white';
-            popup.style.borderRadius = '5px';
-            popup.style.zIndex = '1000';
-            document.body.appendChild(popup);
-
-            const rect = event.target.getBoundingClientRect();
-            popup.style.top = `${rect.top - 40}px`;
-            popup.style.left = `${rect.left}px`;
-
-            setTimeout(() => {
-                document.body.removeChild(popup);
-            }, 2000);
-        });
+    function safeGet(obj, path, defaultValue = 'N/A') {
+        try {
+            return path.split('.').reduce((o, k) => (o || {})[k], obj) || defaultValue;
+        } catch (error) {
+            return defaultValue;
+        }
     }
-
 
     function createModelCards(data) {
         const container = document.getElementById('models-container');
         container.innerHTML = '';
+        if (!data.items || data.items.length === 0) {
+            container.innerHTML = '<p>No models found.</p>';
+            return;
+        }
         data.items.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
-            const modelFormat = "N/A";
-            try {
-            modelFormat = item.spec.predictor.model.modelFormat.name;
-            } catch (error) {
-            modelFormat.textContent = "N/A";
-            }
+            const readyCondition = safeGet(item, 'status.conditions', []).find(c => c.type === 'Ready');
+            const isReady = readyCondition && readyCondition.status === 'True';
             card.innerHTML = `
                 <div class="card">
-                    <button type="button" class="btn-close position-absolute top-0 end-0 m-2" aria-label="Delete" data-model-name="${item.metadata.name}" data-model-namespace="${item.metadata.namespace}"></button>
+                    <button type="button" class="btn-close position-absolute top-0 end-0 m-2" aria-label="Delete" data-model-name="${safeGet(item, 'metadata.name')}" data-model-namespace="${safeGet(item, 'metadata.namespace')}"></button>
                     <div class="image-container">
                         <div class="image"></div>
                     </div>
                     <div class="tag">
-                        <span>${item.status.conditions.find(c => c.type === 'Ready').status === 'True' ? 'Ready' : 'Not Ready'}</span>
+                        <span>${isReady ? 'Ready' : 'Not Ready'}</span>
                     </div>
                     <div class="publication-date">
-                        <span>Deployed ${new Date(item.metadata.creationTimestamp).toLocaleString()}</span>
+                        <span>Deployed ${new Date(safeGet(item, 'metadata.creationTimestamp')).toLocaleString()}</span>
                     </div>
-                    <h1>${item.metadata.name}</h1>
+                    <h1>${safeGet(item, 'metadata.name')}</h1>
                     <p>
-                        Namespace: ${item.metadata.namespace}<br>
-                        URL: ${item.status.url}
-                        <i class="fas fa-copy" onclick="copyToClipboard('${item.status.url}')" style="cursor: pointer;"></i>
+                        Namespace: ${safeGet(item, 'metadata.namespace')}<br>
+                        URL: ${safeGet(item, 'status.url')}
+                        <i class="fas fa-copy" onclick="copyToClipboard('${safeGet(item, 'status.url')}')" style="cursor: pointer;"></i>
                     </p>
                     <div class="user-info">
-                        <div class="avatar">${item.metadata.name.substring(0, 2).toUpperCase()}</div>
-                        <span class="name">${ModelFormat}</span>
+                        <div class="avatar">${safeGet(item, 'metadata.name', '').substring(0, 2).toUpperCase()}</div>
+                        <span class="name">${safeGet(item, 'spec.predictor.model.modelFormat.name')}</span>
                     </div>
                 </div>
             `;
@@ -99,6 +83,20 @@
         // Add event listeners to delete buttons
         document.querySelectorAll('.btn-close').forEach(btn => {
             btn.addEventListener('click', (e) => showDeleteConfirmation(e.target.dataset.modelName, e.target.dataset.modelNamespace));
+        });
+    }
+
+    function filterModels() {
+        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+        const cards = document.querySelectorAll('#models-container .col-md-4');
+        cards.forEach(card => {
+            const name = safeGet(card.querySelector('h1'), 'textContent', '').toLowerCase();
+            const namespace = safeGet(card.querySelector('p'), 'textContent', '').toLowerCase();
+            if (name.includes(searchTerm) || namespace.includes(searchTerm)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
         });
     }
 
@@ -124,26 +122,44 @@
             } else {
                 alert('Failed to delete model: ' + result.error);
             }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while deleting the model');
         });
     }
 
     function fetchModels() {
         fetch('/api/isvc')
             .then(response => response.json())
-            .then(data => createModelCards(data));
+            .then(data => createModelCards(data))
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('models-container').innerHTML = '<p>Error loading models. Please try again later.</p>';
+            });
     }
 
-    function filterModels() {
-        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        const cards = document.querySelectorAll('#models-container .col-md-4');
-        cards.forEach(card => {
-            const name = card.querySelector('h1').textContent.toLowerCase();
-            const namespace = card.querySelector('p').textContent.toLowerCase();
-            if (name.includes(searchTerm) || namespace.includes(searchTerm)) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            const popup = document.createElement('div');
+            popup.textContent = 'URL copied!';
+            popup.style.position = 'fixed';
+            popup.style.padding = '10px';
+            popup.style.background = 'rgba(0,0,0,0.8)';
+            popup.style.color = 'white';
+            popup.style.borderRadius = '5px';
+            popup.style.zIndex = '1000';
+            document.body.appendChild(popup);
+
+            const rect = event.target.getBoundingClientRect();
+            popup.style.top = `${rect.top - 40}px`;
+            popup.style.left = `${rect.left}px`;
+
+            setTimeout(() => {
+                document.body.removeChild(popup);
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
         });
     }
 
@@ -252,9 +268,6 @@
     .col-md-4 {
         display: flex;
         justify-content: center;
-    }
-    .btn-close {
-        z-index: 10;
     }
 </style>
 {% endblock %}
