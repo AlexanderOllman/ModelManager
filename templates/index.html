@@ -1,6 +1,33 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2 class="mt-4">Welcome to Kubernetes Dashboard</h2>
+<div class="container">
+<div class="row text-center justify-content align-items-center">
+<h2 class="mt-4">Welcome to HPE Private Cloud AI LLM Manager</h2>
+<div class="row">
+    <div class="col-4">
+        <div class="card">
+            <div class="card-body text-center align-items-center">
+                <a href="/models">View Running Models</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-4">
+        <div class="card">
+            <div class="card-body text-center align-items-center">
+                <a href="/manage">Manage Models</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-4">
+        <div class="card">
+            <div class="card-body text-center align-items-center">
+                <a href="/deploy">Deploy New Model</a>
+            </div>
+        </div>
+    </div>
+</div>
 <p>Use the sidebar to navigate between Models and Manage pages.</p>
+</div>
+</div>
 {% endblock %}
