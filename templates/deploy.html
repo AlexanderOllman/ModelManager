@@ -162,9 +162,6 @@
             card.className = 'col-md-4 mb-4';
             card.innerHTML = `
                 <div class="card">
-                    <div class="image-container">
-                        <div class="image"></div>
-                    </div>
                     <div class="tag">
                         <span>Ready to Deploy</span>
                     </div>
@@ -172,10 +169,9 @@
                         <span>Added ${new Date(item.addedDate).toLocaleString()}</span>
                     </div>
                     <h1>${item.modelName}</h1>
-                    <p>
-                        Namespace: ${item.namespace}<br>
-                        Image: ${item.containerImage}
-                    </p>
+                    <p>Namespace: ${item.namespace}</p>
+                    <p class="mt-3">Image: ${item.containerImage}</p>
+                    <p class="mt-3">Runtime: ${item.runtime}</p>
                     <div class="user-info">
                         <div class="avatar">${item.modelName.substring(0, 2).toUpperCase()}</div>
                         <span class="name">${item.modelFormat}</span>

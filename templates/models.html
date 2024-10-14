@@ -63,9 +63,8 @@
                         <span>Deployed ${new Date(safeGet(item, 'metadata.creationTimestamp')).toLocaleString()}</span>
                     </div>
                     <h1>${safeGet(item, 'metadata.name')}</h1>
-                    <p>
-                        Namespace: ${safeGet(item, 'metadata.namespace')}<br>
-                        URL: ${safeGet(item, 'status.url')}
+                    <p>Namespace: ${safeGet(item, 'metadata.namespace')}</p>
+                    <p class="mt-3">URL: ${safeGet(item, 'status.url')}
                         <i class="fas fa-copy" onclick="copyToClipboard('${safeGet(item, 'status.url')}')" style="cursor: pointer;"></i>
                     </p>
                     <div class="user-info">
