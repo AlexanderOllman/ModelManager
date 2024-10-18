@@ -9,23 +9,25 @@ COPY . /app
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# RUN export HTTP_PROXY=http://hpeproxy.its.hpecorp.net:80 && \
-#     export HTTPS_PROXY=http://hpeproxy.its.hpecorp.net:80
-# Install kubectl
+# Install necessary packages: Git, Git LFS, and curl for installing kubectl
 RUN apt-get update && \
-    apt-get install -y curl && \
+    apt-get install -y curl git git-lfs && \
+    git lfs install && \
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl && \
-    rm kubectl
+    rm kubectl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy the current directory contents into the container at /app
+# Re-copy the current directory contents (if any changes)
 COPY . /app
 
-# Install any needed dependencies specified in requirements.txt
+# Ensure any Python dependencies in requirements.txt are installed
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Make port 80 available to the world outside this container
+# Make port 80 and 8080 available to the world outside this container
 EXPOSE 80
 EXPOSE 8080
+
 # Run app.py when the container launches
 CMD ["python3", "app.py"]

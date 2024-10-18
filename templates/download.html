@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mt-4">Download Models</h2>
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <input type="text" id="modelSearch" class="form-control w-75" placeholder="Search models">
+    <button id="addModelBtn" class="btn btn-primary">Add Model</button>
+</div>
+<div id="models-container" class="row">
+    <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<!-- Add Model Modal -->
+<div class="modal fade" id="addModelModal" tabindex="-1" aria-labelledby="addModelModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addModelModalLabel">Add New Model</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="addModelForm">
+          <div class="mb-3">
+            <label for="modelRepo" class="form-label">HuggingFace Repository</label>
+            <input type="text" class="form-control" id="modelRepo" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Download</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Download Status Modal -->
+<div class="modal fade" id="downloadStatusModal" tabindex="-1" aria-labelledby="downloadStatusModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="downloadStatusModalLabel">Download Status</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="downloadStatusBody"></div>
+        <div id="downloadSpinner" class="text-center mt-3">
+          <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+<script>
+    let models = [];
+
+    function createModelCards(data) {
+        const container = document.getElementById('models-container');
+        container.innerHTML = '';
+        if (data.length === 0) {
+            container.innerHTML = '<p>No models found.</p>';
+            return;
+        }
+        data.forEach(model => {
+            const card = document.createElement('div');
+            card.className = 'col-md-4 mb-4';
+            card.innerHTML = `
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">${model.name}</h5>
+                        <div class="progress mb-3">
+                            <div class="progress-bar" role="progressbar" style="width: ${model.progress}%;" aria-valuenow="${model.progress}" aria-valuemin="0" aria-valuemax="100">${model.progress}%</div>
+                        </div>
+                        <div class="status-label ${model.progress === 100 ? 'text-success' : 'visually-hidden'}">
+                            Downloaded
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function updateModelProgress(modelName, progress) {
+        const modelCard = document.querySelector(`.card-title:contains('${modelName}')`).closest('.card');
+        if (modelCard) {
+            const progressBar = modelCard.querySelector('.progress-bar');
+            const statusLabel = modelCard.querySelector('.status-label');
+            
+            progressBar.style.width = `${progress}%`;
+            progressBar.setAttribute('aria-valuenow', progress);
+            progressBar.textContent = `${progress}%`;
+            
+            if (progress === 100) {
+                statusLabel.classList.remove('visually-hidden');
+                statusLabel.classList.add('text-success');
+                progressBar.classList.add('visually-hidden');
+            } else {
+                statusLabel.classList.add('visually-hidden');
+                statusLabel.classList.remove('text-success');
+                progressBar.classList.remove('visually-hidden');
+            }
+        }
+    }
+
+    function filterModels() {
+        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+        const filteredModels = models.filter(model => 
+            model.name.toLowerCase().includes(searchTerm)
+        );
+        createModelCards(filteredModels);
+    }
+
+    function showAddModelModal() {
+        const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
+        modal.show();
+    }
+
+    function downloadModel(e) {
+        e.preventDefault();
+        const modelRepo = document.getElementById('modelRepo').value;
+        const addModelModal = bootstrap.Modal.getInstance(document.getElementById('addModelModal'));
+        addModelModal.hide();
+
+        const downloadStatusModal = new bootstrap.Modal(document.getElementById('downloadStatusModal'));
+        downloadStatusModal.show();
+        document.getElementById('downloadStatusBody').innerHTML = '';
+        document.getElementById('downloadSpinner').style.display = 'block';
+
+        fetch('/api/download-model', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model_repo: modelRepo }),
+        }).then(response => response.json())
+          .then(data => {
+              if (data.error) {
+                  addStatusMessage(data.error, 'error');
+                  document.getElementById('downloadSpinner').style.display = 'none';
+              }
+          });
+    }
+
+    function addStatusMessage(message, status = 'info') {
+        const statusBody = document.getElementById('downloadStatusBody');
+        const statusMessage = document.createElement('p');
+        statusMessage.textContent = message;
+        statusMessage.classList.add(status);
+        statusBody.appendChild(statusMessage);
+
+        if (status === 'error' || message.includes('completed')) {
+            document.getElementById('downloadSpinner').style.display = 'none';
+        }
+    }
+
+    const socket = io();
+    socket.on('download_status', function(data) {
+        addStatusMessage(data.message, data.error ? 'error' : 'info');
+        if (data.complete || data.error) {
+            fetchModels();
+        }
+    });
+
+    socket.on('download_progress', function(data) {
+        updateModelProgress(data.model, data.progress);
+    });
+
+    function fetchModels() {
+        fetch('/api/list-models')
+            .then(response => response.json())
+            .then(data => {
+                models = data;
+                createModelCards(models);
+            });
+    }
+
+    // Refresh model progress every 5 seconds
+    setInterval(fetchModels, 5000);
+
+    // Event Listeners
+    document.getElementById('modelSearch').addEventListener('input', filterModels);
+    document.getElementById('addModelBtn').addEventListener('click', showAddModelModal);
+    document.getElementById('addModelForm').addEventListener('submit', downloadModel);
+
+    // Initial fetch
+    fetchModels();
+
+    // Helper function to find elements containing text
+    jQuery.expr[':'].contains = function(a, i, m) {
+        return jQuery(a).text().toUpperCase().indexOf(m[3].toUpperCase()) >= 0;
+    };
+</script>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .info {
+        color: blue;
+    }
+    .error {
+        color: red;
+    }
+    .status-label {
+        font-weight: bold;
+    }
+</style>
+{% endblock %}

@@ -6,11 +6,14 @@ import threading
 import time
 from flask_socketio import SocketIO
 import logging
+import os
 
 logging.basicConfig(level=logging.WARNING)
 
 app = Flask(__name__)
 socketio = SocketIO(app)
+
+download_progress = {}
 
 deployment_lock = threading.Lock()
 deployment_in_progress = False
@@ -201,6 +204,90 @@ def delete_resource(resource_type, resource_name):
     return jsonify({'success': True, 'message': f'{resource_type.upper()} {resource_name} deleted successfully'})
 
 
+def get_dir_size(path):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            total_size += os.path.getsize(fp)
+    return total_size
+
+@app.route('/download')
+def download_page():
+    return render_template('download.html')
+
+@app.route('/api/list-models')
+def list_models():
+    models_path = "/mnt/models"
+    models = []
+    try:
+        for root, dirs, files in os.walk(models_path):
+            for dir in dirs:
+                relative_path = os.path.relpath(os.path.join(root, dir), models_path)
+                models.append({
+                    'name': relative_path,
+                    'progress': download_progress.get(relative_path, 100 if os.path.exists(os.path.join(models_path, relative_path)) else 0)
+                })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    return jsonify(models)
+
+@app.route('/api/download-model', methods=['POST'])
+def download_model():
+    model_repo = request.json.get('model_repo')
+    if not model_repo:
+        return jsonify({'error': 'Model repository not provided'}), 400
+
+    pvc_mount_path = f"/mnt/models/{model_repo}"
+    repo_url = f"https://huggingface.co/{model_repo}"
+
+    def download_process():
+        try:
+            if not os.path.exists(pvc_mount_path):
+                socketio.emit('download_status', {'message': f"Creating directory {pvc_mount_path}"})
+                os.makedirs(pvc_mount_path)
+
+            if not os.listdir(pvc_mount_path):
+                socketio.emit('download_status', {'message': f"Cloning repository {repo_url} into {pvc_mount_path}"})
+                process = subprocess.Popen(
+                    ["git", "clone", repo_url, pvc_mount_path],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True
+                )
+
+                total_objects = None
+                received_objects = 0
+
+                for line in process.stdout:
+                    if "remote: Counting objects:" in line:
+                        total_objects = int(line.split()[3])
+                    elif "Receiving objects:" in line and "%" in line:
+                        received_objects = int(line.split()[2].split('/')[0])
+                        progress = int((received_objects / total_objects) * 100) if total_objects else 0
+                        download_progress[model_repo] = progress
+                        socketio.emit('download_progress', {'model': model_repo, 'progress': progress})
+
+                process.wait()
+                if process.returncode != 0:
+                    raise subprocess.CalledProcessError(process.returncode, process.args)
+
+                download_progress[model_repo] = 100
+                socketio.emit('download_progress', {'model': model_repo, 'progress': 100})
+                socketio.emit('download_status', {'message': "Model repository successfully cloned."})
+            else:
+                socketio.emit('download_status', {'message': "Repository already exists in PVC, skipping clone."})
+
+            socketio.emit('download_status', {'message': "Download process completed.", 'complete': True})
+        except subprocess.CalledProcessError as e:
+            socketio.emit('download_status', {'message': f"Error during git operation: {str(e)}", 'error': True})
+        except Exception as e:
+            socketio.emit('download_status', {'message': f"An error occurred: {str(e)}", 'error': True})
+
+    thread = threading.Thread(target=download_process)
+    thread.start()
+
+    return jsonify({'message': 'Download process started'})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')
