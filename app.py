@@ -15,7 +15,33 @@ socketio = SocketIO(app)
 deployment_lock = threading.Lock()
 deployment_in_progress = False
 
-logging.basicConfig(level=logging.ERROR)
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Create a custom handler for HuggingFace logging
+class HFLoggingHandler(logging.Handler):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def emit(self, record):
+        log_entry = self.format(record)
+        self.callback(log_entry)
+
+class StringIOWithCallback(io.StringIO):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def write(self, s):
+        super().write(s)
+        if s.strip():  # Only send non-empty lines
+            self.callback(s.strip())
+
 
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
@@ -271,26 +297,78 @@ def list_models():
 def download_model():
     model_repo = request.args.get('repo')
     if not model_repo:
+        logger.error("No model repository specified")
         return Response("data: Error: No model repository specified\n\n", 
+                       mimetype='text/event-stream')
+
+    if not ensure_model_directory():
+        logger.error("Could not create models directory")
+        return Response("data: Error: Could not create models directory\n\n", 
                        mimetype='text/event-stream')
 
     @stream_with_context
     def generate():
+        def send_log(message):
+            yield f"data: {message}\n\n"
+
         try:
-            cache_dir = "/mnt/models"
+            cache_dir = "/mnt/models/hub"
+            logger.info(f"Starting download of {model_repo}")
             yield f"data: Starting download of {model_repo}\n\n"
-            
-            result = snapshot_download(
-                repo_id=model_repo,
-                cache_dir=cache_dir,
-                local_files_only=False,
-                allow_patterns=["*.safetensors", "*.json"]
-            )
-            
-            yield f"data: Model files downloaded to {cache_dir}\n\n"
-            yield f"data: Downloaded files located at: {result}\n\n"
+
+            # Create a callback for logging
+            def log_callback(message):
+                logger.info(message)
+                yield f"data: {message}\n\n"
+
+            # Set up HuggingFace logging handler
+            hf_handler = HFLoggingHandler(lambda msg: next(send_log(msg)))
+            hf_logger = logging.getLogger("huggingface_hub")
+            hf_logger.addHandler(hf_handler)
+            hf_logger.setLevel(logging.INFO)
+
+            # Capture stdout and stderr
+            stdout_callback = StringIOWithCallback(lambda msg: next(send_log(f"stdout: {msg}")))
+            stderr_callback = StringIOWithCallback(lambda msg: next(send_log(f"stderr: {msg}")))
+
+            logger.info("Setting up download parameters")
+            yield f"data: Setting up download parameters\n\n"
+
+            with contextlib.redirect_stdout(stdout_callback), contextlib.redirect_stderr(stderr_callback):
+                logger.info("Starting snapshot_download")
+                yield f"data: Starting snapshot_download\n\n"
+                
+                result = snapshot_download(
+                    repo_id=model_repo,
+                    cache_dir=cache_dir,
+                    local_files_only=False,
+                    allow_patterns=["*.safetensors", "*.json"],
+                    verbose=True
+                )
+                
+                logger.info(f"Download completed. Files stored at: {result}")
+                yield f"data: Model files downloaded to {cache_dir}\n\n"
+                yield f"data: Downloaded files located at: {result}\n\n"
+                
+                # List downloaded files
+                try:
+                    files = os.listdir(result)
+                    logger.info(f"Downloaded files: {files}")
+                    yield f"data: Downloaded files: {', '.join(files)}\n\n"
+                except Exception as e:
+                    logger.error(f"Error listing downloaded files: {e}")
+                    yield f"data: Error listing downloaded files: {str(e)}\n\n"
+
+            yield "data: Download process complete!\n\n"
+            logger.info("Download process complete")
+
         except Exception as e:
-            yield f"data: Error downloading model: {str(e)}\n\n"
+            error_msg = f"Error downloading model: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            yield f"data: {error_msg}\n\n"
+        finally:
+            # Clean up the HuggingFace logging handler
+            hf_logger.removeHandler(hf_handler)
 
     return Response(generate(), mimetype='text/event-stream')
 

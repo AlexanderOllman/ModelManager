@@ -27,23 +27,27 @@
 
 <!-- Download Progress Modal -->
 <div class="modal fade" id="downloadProgressModal" tabindex="-1" aria-labelledby="downloadProgressModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="downloadProgressModalLabel">Download Progress</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div id="downloadStatusBody"></div>
-        <div id="downloadSpinner" class="text-center mt-3">
-          <div class="spinner-border" role="status">
-            <span class="visually-hidden">Loading...</span>
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="downloadProgressModalLabel">Download Progress</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="downloadStatusBody" class="log-container"></div>
+          <div id="downloadSpinner" class="text-center mt-3">
+            <div class="spinner-border" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
           </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-primary" id="downloadCopyLogs">Copy Logs</button>
         </div>
       </div>
     </div>
   </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -351,6 +355,40 @@
         border-top: 1px solid #dee2e6;
         background-color: #f8f9fa;
         border-radius: 0 0 12px 12px;
+    }
+
+
+    .log-container {
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: monospace;
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        border: 1px solid #dee2e6;
+    }
+
+    .log-container p {
+        margin: 0;
+        padding: 2px 0;
+        font-size: 0.9rem;
+    }
+
+    .log-container .stdout {
+        color: #0d6efd;
+    }
+
+    .log-container .stderr {
+        color: #dc3545;
+    }
+
+    .log-container .info {
+        color: #198754;
+    }
+
+    .log-container .error {
+        color: #dc3545;
+        font-weight: bold;
     }
 
     /* Spinner styling */
