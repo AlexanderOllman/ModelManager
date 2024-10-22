@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, Response
+from flask import Flask, render_template, jsonify, request, Response, stream_with_context
 import subprocess
 import json
 import yaml
@@ -266,19 +266,21 @@ def list_models():
         print(f"Error listing models: {e}")
         return jsonify([])
 
+
 @app.route('/api/download-model')
 def download_model():
+    model_repo = request.args.get('repo')
+    if not model_repo:
+        return Response("data: Error: No model repository specified\n\n", 
+                       mimetype='text/event-stream')
+
+    @stream_with_context
     def generate():
         try:
-            model_repo = request.args.get('repo')
-            if not model_repo:
-                yield "data: Error: No model repository specified\n\n"
-                return
-
-            cache_dir = "/mnt/models/hub"
+            cache_dir = "/mnt/models"
             yield f"data: Starting download of {model_repo}\n\n"
             
-            snapshot_download(
+            result = snapshot_download(
                 repo_id=model_repo,
                 cache_dir=cache_dir,
                 local_files_only=False,
@@ -286,6 +288,7 @@ def download_model():
             )
             
             yield f"data: Model files downloaded to {cache_dir}\n\n"
+            yield f"data: Downloaded files located at: {result}\n\n"
         except Exception as e:
             yield f"data: Error downloading model: {str(e)}\n\n"
 

@@ -103,11 +103,13 @@
         document.getElementById('newModelForm').reset();
     }
 
+
     function downloadModel(modelRepo) {
         const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
         const statusBody = document.getElementById('downloadStatusBody');
+        const spinner = document.getElementById('downloadSpinner');
         statusBody.innerHTML = '';
-        document.getElementById('downloadSpinner').style.display = 'block';
+        spinner.style.display = 'block';
         modal.show();
 
         const eventSource = new EventSource(`/api/download-model?repo=${encodeURIComponent(modelRepo)}`);
@@ -117,22 +119,30 @@
             message.textContent = event.data;
             statusBody.appendChild(message);
 
-            if (event.data.includes('downloaded to')) {
+            // Check for completion or error
+            if (event.data.includes('downloaded to') || event.data.includes('Error')) {
                 eventSource.close();
-                document.getElementById('downloadSpinner').style.display = 'none';
-                fetchModels(); // Refresh the model list
+                spinner.style.display = 'none';
+                
+                if (!event.data.includes('Error')) {
+                    // Success - refresh the model list
+                    setTimeout(() => {
+                        fetchModels();
+                    }, 1000); // Wait a second before refreshing
+                }
             }
         };
 
         eventSource.onerror = function(error) {
             eventSource.close();
             const errorMessage = document.createElement('p');
-            errorMessage.textContent = 'Error downloading model';
+            errorMessage.textContent = 'Connection error occurred';
             errorMessage.style.color = 'red';
             statusBody.appendChild(errorMessage);
-            document.getElementById('downloadSpinner').style.display = 'none';
+            spinner.style.display = 'none';
         };
     }
+
 
     function fetchModels() {
         fetch('/api/list-models')
