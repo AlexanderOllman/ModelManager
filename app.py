@@ -295,6 +295,32 @@ def list_models():
         print(f"Error listing models: {e}")
         return jsonify([])
 
+def ensure_model_directory():
+    models_path = "/mnt/models/hub"
+    try:
+        logger.info(f"Checking if models directory exists: {models_path}")
+        if os.path.exists(models_path):
+            logger.info("Models directory already exists")
+        else:
+            logger.info("Creating models directory")
+            os.makedirs(models_path, exist_ok=True)
+            logger.info("Models directory created successfully")
+
+        # Verify write permissions
+        test_file = os.path.join(models_path, '.write_test')
+        try:
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            logger.info("Write permission test passed")
+        except Exception as e:
+            logger.error(f"Write permission test failed: {e}")
+            return False
+
+        return True
+    except Exception as e:
+        logger.error(f"Error ensuring models directory exists: {e}")
+        return False
 
 @app.route('/api/download-model')
 def download_model():
