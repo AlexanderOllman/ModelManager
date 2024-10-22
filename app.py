@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
 import subprocess
 import json
 import yaml
@@ -58,14 +58,12 @@ def check_deployment_status(namespace, model_name):
                     
                     if ready_condition['status'] == 'True':
                         socketio.emit('deployment_status', {'status': 'success', 'message': "Model deployed successfully!", 'final': True})
-                        deployment_in_progress = False
                         return
 
         attempt += 1
         time.sleep(10)  # Wait for 10 seconds before checking again
 
     socketio.emit('deployment_status', {'status': 'error', 'message': "Deployment timed out", 'final': True})
-    deployment_in_progress = False
 
 def deploy_runtime(runtime_yaml, runtime_name):
     global deployment_in_progress
@@ -103,60 +101,9 @@ def deploy_inference_service(inference_yaml, namespace):
         socketio.emit('deployment_status', {'status': 'error', 'message': f"Failed to deploy inference service: {error}"})
         return False
     
-    socketio.emit('deployment_status', {'status': 'success', 'message': "Inference service deployment started."})
+    socketio.emit('deployment_status', {'status': 'info', 'message': "Inference service deployment started."})
     return True
 
-def get_model_directories():
-    base_path = "/mnt/models/hub"
-    models = []
-    try:
-        for root, dirs, files in os.walk(base_path):
-            if root != base_path:  # Skip the base directory itself
-                rel_path = os.path.relpath(root, base_path)
-                if not rel_path.startswith('.'):  # Skip hidden directories
-                    models.append({
-                        "path": rel_path,
-                        "created": time.ctime(os.path.getctime(root))
-                    })
-    except Exception as e:
-        logging.error(f"Error reading model directories: {e}")
-    return models
-
-def download_model_files(model_repo):
-    try:
-        cache_dir = "/mnt/models/hub"
-        
-        # Initial status
-        socketio.emit('download_status', {
-            'status': 'info',
-            'message': f"Starting download of {model_repo}..."
-        })
-
-        # Download the model files
-        snapshot_download(
-            repo_id=model_repo,
-            cache_dir=cache_dir,
-            resume_download=True,
-            local_files_only=False,
-            allow_patterns=["*.safetensors", "*.json"]
-        )
-
-        # Success status
-        socketio.emit('download_status', {
-            'status': 'success',
-            'message': f"Model files successfully downloaded to {cache_dir}",
-            'final': True
-        })
-        
-    except Exception as e:
-        # Error status
-        socketio.emit('download_status', {
-            'status': 'error',
-            'message': f"Error downloading model: {str(e)}",
-            'final': True
-        })
-
-# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -176,34 +123,18 @@ def deploy():
     return render_template('deploy.html')
 
 @app.route('/download')
-def download_page():
+def download():
     return render_template('download.html')
-
-@app.route('/api/model-directories')
-def get_directories():
-    models = get_model_directories()
-    return jsonify(models)
-
-@app.route('/api/download-model', methods=['POST'])
-def start_download():
-    data = request.json
-    model_repo = data.get('model_repo')
-    
-    if not model_repo:
-        return jsonify({'error': 'Model repository name is required'}), 400
-
-    threading.Thread(target=download_model_files, args=(model_repo,)).start()
-    return jsonify({'message': 'Download started'})
 
 @app.route('/api/isvc')
 def get_isvc():
     isvc_data, _ = run_kubectl_command("kubectl get isvc -A -o json")
-    return isvc_data
+    return jsonify(json.loads(isvc_data))
 
 @app.route('/api/clusterservingruntime')
 def get_clusterservingruntime():
     csr_data, _ = run_kubectl_command("kubectl get clusterservingruntime -A -o json")
-    return csr_data
+    return jsonify(json.loads(csr_data))
 
 @app.route('/api/pods')
 def get_pods():
@@ -298,6 +229,67 @@ def delete_resource(resource_type, resource_name):
     if error:
         return jsonify({'success': False, 'error': error}), 500
     return jsonify({'success': True, 'message': f'{resource_type.upper()} {resource_name} deleted successfully'})
+
+@app.route('/api/describe/<resource_type>/<resource_name>')
+def describe_resource(resource_type, resource_name):
+    namespace = request.args.get('namespace')
+    if resource_type == 'isvc':
+        command = f"kubectl describe inferenceservice {resource_name}"
+        if namespace:
+            command += f" -n {namespace}"
+    elif resource_type == 'csr':
+        command = f"kubectl describe clusterservingruntime {resource_name}"
+    else:
+        return jsonify({'error': 'Invalid resource type'}), 400
+
+    description, error = run_kubectl_command(command)
+    if error:
+        return jsonify({'error': error}), 500
+    return jsonify({'description': description})
+
+@app.route('/api/list-models')
+def list_models():
+    models_path = "/mnt/models/hub"
+    try:
+        if not os.path.exists(models_path):
+            return jsonify([])
+        
+        model_paths = []
+        for root, dirs, _ in os.walk(models_path):
+            if root != models_path:  # Skip the base directory
+                rel_path = os.path.relpath(root, models_path)
+                if rel_path != ".":  # Skip current directory
+                    model_paths.append(rel_path)
+        
+        return jsonify(model_paths)
+    except Exception as e:
+        print(f"Error listing models: {e}")
+        return jsonify([])
+
+@app.route('/api/download-model')
+def download_model():
+    def generate():
+        try:
+            model_repo = request.args.get('repo')
+            if not model_repo:
+                yield "data: Error: No model repository specified\n\n"
+                return
+
+            cache_dir = "/mnt/models/hub"
+            yield f"data: Starting download of {model_repo}\n\n"
+            
+            snapshot_download(
+                repo_id=model_repo,
+                cache_dir=cache_dir,
+                local_files_only=False,
+                allow_patterns=["*.safetensors", "*.json"]
+            )
+            
+            yield f"data: Model files downloaded to {cache_dir}\n\n"
+        except Exception as e:
+            yield f"data: Error downloading model: {str(e)}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')

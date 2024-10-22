@@ -18,20 +18,19 @@
     <form id="newModelForm">
         <div class="mb-3">
             <label for="modelRepo" class="form-label">HuggingFace Repository</label>
-            <input type="text" class="form-control" id="modelRepo" required>
-            <small class="form-text text-muted">Enter the HuggingFace repository name (e.g., "facebook/opt-350m")</small>
+            <input type="text" class="form-control" id="modelRepo" required placeholder="e.g., facebook/opt-350m">
         </div>
         <button type="submit" class="btn btn-primary">Download</button>
         <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
     </form>
 </div>
 
-<!-- Download Status Modal -->
-<div class="modal fade" id="downloadStatusModal" tabindex="-1" aria-labelledby="downloadStatusModalLabel" aria-hidden="true">
+<!-- Download Progress Modal -->
+<div class="modal fade" id="downloadProgressModal" tabindex="-1" aria-labelledby="downloadProgressModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="downloadStatusModalLabel">Download Status</h5>
+        <h5 class="modal-title" id="downloadProgressModalLabel">Download Progress</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
@@ -49,12 +48,13 @@
 
 {% block scripts %}
 <script>
-    const socket = io();
-    let models = [];
-
     function createModelCards(data) {
         const container = document.getElementById('models-container');
         container.innerHTML = '';
+        if (data.length === 0) {
+            container.innerHTML = '<p>No models found.</p>';
+            return;
+        }
         data.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
@@ -67,12 +67,9 @@
                         <span>Downloaded</span>
                     </div>
                     <div class="publication-date">
-                        <span>Created: ${item.created}</span>
+                        <span>Location: /mnt/models/hub</span>
                     </div>
-                    <h1>${item.path}</h1>
-                    <p>
-                        Location: /mnt/models/hub/${item.path}
-                    </p>
+                    <h1>${item}</h1>
                 </div>
             `;
             container.appendChild(card);
@@ -81,10 +78,14 @@
 
     function filterModels() {
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        const filteredModels = models.filter(model => 
-            model.path.toLowerCase().includes(searchTerm)
-        );
-        createModelCards(filteredModels);
+        document.querySelectorAll('#models-container .col-md-4').forEach(card => {
+            const name = card.querySelector('h1').textContent.toLowerCase();
+            if (name.includes(searchTerm)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
     }
 
     function showAddModelForm() {
@@ -102,68 +103,53 @@
         document.getElementById('newModelForm').reset();
     }
 
-    function downloadModel(e) {
-        e.preventDefault();
-        const modelRepo = document.getElementById('modelRepo').value;
-
-        // Show the status modal
-        const modal = new bootstrap.Modal(document.getElementById('downloadStatusModal'));
-        modal.show();
-        document.getElementById('downloadStatusBody').innerHTML = '';
+    function downloadModel(modelRepo) {
+        const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
+        const statusBody = document.getElementById('downloadStatusBody');
+        statusBody.innerHTML = '';
         document.getElementById('downloadSpinner').style.display = 'block';
+        modal.show();
 
-        // Start the download
-        fetch('/api/download-model', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ model_repo: modelRepo }),
-        }).then(response => response.json())
-          .then(data => {
-              if (data.error) {
-                  const statusBody = document.getElementById('downloadStatusBody');
-                  const errorMessage = document.createElement('p');
-                  errorMessage.textContent = data.error;
-                  errorMessage.classList.add('error');
-                  statusBody.appendChild(errorMessage);
-                  document.getElementById('downloadSpinner').style.display = 'none';
-              }
-          });
+        const eventSource = new EventSource(`/api/download-model?repo=${encodeURIComponent(modelRepo)}`);
+
+        eventSource.onmessage = function(event) {
+            const message = document.createElement('p');
+            message.textContent = event.data;
+            statusBody.appendChild(message);
+
+            if (event.data.includes('downloaded to')) {
+                eventSource.close();
+                document.getElementById('downloadSpinner').style.display = 'none';
+                fetchModels(); // Refresh the model list
+            }
+        };
+
+        eventSource.onerror = function(error) {
+            eventSource.close();
+            const errorMessage = document.createElement('p');
+            errorMessage.textContent = 'Error downloading model';
+            errorMessage.style.color = 'red';
+            statusBody.appendChild(errorMessage);
+            document.getElementById('downloadSpinner').style.display = 'none';
+        };
     }
 
-    // Socket.IO event handlers
-    socket.on('download_status', function(data) {
-        const statusBody = document.getElementById('downloadStatusBody');
-        const statusMessage = document.createElement('p');
-        statusMessage.textContent = data.message;
-        statusMessage.classList.add(data.status);
-        statusBody.appendChild(statusMessage);
-
-        if (data.final) {
-            document.getElementById('downloadSpinner').style.display = 'none';
-            if (data.status === 'success') {
-                statusMessage.style.color = 'green';
-                statusMessage.style.fontWeight = 'bold';
-                fetchModels();  // Refresh the model list
-            }
-        }
-    });
-
     function fetchModels() {
-        fetch('/api/model-directories')
+        fetch('/api/list-models')
             .then(response => response.json())
-            .then(data => {
-                models = data;
-                createModelCards(data);
-            });
+            .then(data => createModelCards(data));
     }
 
     // Event Listeners
     document.getElementById('modelSearch').addEventListener('input', filterModels);
     document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
     document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
-    document.getElementById('newModelForm').addEventListener('submit', downloadModel);
+    document.getElementById('newModelForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const modelRepo = document.getElementById('modelRepo').value;
+        hideAddModelForm();
+        downloadModel(modelRepo);
+    });
 
     // Initial load
     fetchModels();
@@ -172,20 +158,6 @@
 
 {% block styles %}
 <style>
-    /* Container Styles */
-    #models-container {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: start;
-        gap: 20px;
-    }
-
-    .col-md-4 {
-        display: flex;
-        justify-content: center;
-    }
-
-    /* Card Styles */
     .card {
         --push: 8px;
         min-width: 320px;
@@ -203,6 +175,7 @@
         box-shadow: var(--push) var(--push) 0 0 black;
         will-change: box-shadow, transform;
         height: 100%;
+        margin: 0 auto;
     }
 
     .card:active {
@@ -216,7 +189,6 @@
         transform: translate(var(--push), var(--push));
     }
 
-    /* Image Container Styles */
     .image-container {
         background-color: SandyBrown;
         width: 100%;
@@ -234,7 +206,6 @@
         width: 100%;
     }
 
-    /* Tag Styles */
     .tag {
         background-color: SandyBrown;
         align-self: flex-start;
@@ -245,29 +216,39 @@
         letter-spacing: 0.25px;
     }
 
-    /* Title Styles */
     .card h1 {
         margin: 8px 0;
         font-size: 20px;
         word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
-    /* Publication Date Styles */
     .publication-date {
         font-size: 14px;
         color: rgba(0, 0, 0, 0.75);
     }
 
-    /* Content Styles */
     .card p {
         margin: 0;
         font-size: 14px;
         color: rgba(0, 0, 0, 0.65);
         line-height: 1.5;
-        word-wrap: break-word;
     }
 
-    /* Form Styles */
+    #models-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: start;
+        gap: 20px;
+        padding: 20px 0;
+    }
+
+    .col-md-4 {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 20px;
+    }
+
     #add-model-form {
         max-width: 600px;
         margin: 0 auto;
@@ -277,88 +258,109 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    #newModelForm .form-label {
-        font-weight: bold;
-    }
-
-    #newModelForm .form-text {
-        color: rgba(0, 0, 0, 0.6);
-    }
-
-    /* Status Modal Styles */
-    #downloadStatusModal .modal-body {
-        max-height: 400px;
-        overflow-y: auto;
-    }
-
     #downloadStatusBody {
+        max-height: 300px;
+        overflow-y: auto;
         font-family: monospace;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        margin-bottom: 10px;
     }
 
     #downloadStatusBody p {
-        margin-bottom: 0.5rem;
-        padding: 4px 8px;
-        border-radius: 4px;
+        margin: 5px 0;
+        line-height: 1.4;
     }
 
-    /* Status Colors */
-    .info {
-        color: #0d6efd;
-        background-color: rgba(13, 110, 253, 0.1);
+    #downloadSpinner {
+        padding: 20px 0;
     }
 
     .success {
         color: #198754;
-        background-color: rgba(25, 135, 84, 0.1);
     }
 
     .error {
         color: #dc3545;
-        background-color: rgba(220, 53, 69, 0.1);
     }
 
-    /* Search Bar Styles */
+    .info {
+        color: #0d6efd;
+    }
+
+    /* Search bar styling */
     #modelSearch {
-        padding: 10px 15px;
-        border-radius: 8px;
+        border-radius: 20px;
+        padding: 10px 20px;
         border: 1px solid #ced4da;
-        font-size: 16px;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
     }
 
     #modelSearch:focus {
         border-color: #86b7fe;
         box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        outline: none;
     }
 
-    /* Spinner Styles */
-    #downloadSpinner {
-        margin: 20px 0;
+    /* Add Model button styling */
+    #addModelBtn {
+        border-radius: 20px;
+        padding: 8px 20px;
+        transition: all 0.15s ease-in-out;
     }
 
+    #addModelBtn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Form input styling */
+    .form-control {
+        border-radius: 8px;
+    }
+
+    .form-label {
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Modal styling */
+    .modal-content {
+        border-radius: 12px;
+        border: none;
+    }
+
+    .modal-header {
+        border-bottom: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .modal-footer {
+        border-top: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+        border-radius: 0 0 12px 12px;
+    }
+
+    /* Spinner styling */
     .spinner-border {
         width: 2rem;
         height: 2rem;
+        border-width: 0.25em;
     }
 
-    /* Button Styles */
-    .btn-primary {
-        padding: 10px 20px;
-        font-weight: 500;
-    }
-
-    .btn-secondary {
-        padding: 10px 20px;
-        margin-left: 10px;
-    }
-
-    /* Responsive Adjustments */
     @media (max-width: 768px) {
         .card {
-            min-width: 100%;
+            min-width: 280px;
         }
 
         #add-model-form {
-            margin: 20px;
+            padding: 15px;
+        }
+
+        .col-md-4 {
+            width: 100%;
         }
     }
 </style>

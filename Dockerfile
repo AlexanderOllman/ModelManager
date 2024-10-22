@@ -6,8 +6,12 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# # Install any needed packages specified in requirements.txt
+# RUN pip install --no-cache-dir -r requirements.txt
+
+# Ensure any Python dependencies in requirements.txt are installed
+# RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install -r requirements.txt
 
 # Install necessary packages: Git, Git LFS, and curl for installing kubectl
 RUN apt-get update && \
@@ -18,15 +22,6 @@ RUN apt-get update && \
     rm kubectl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-
-# Re-copy the current directory contents (if any changes)
-COPY . /app
-
-# Ensure any Python dependencies in requirements.txt are installed
-# RUN pip3 install --no-cache-dir -r requirements.txt
-RUN pip3 install -r requirements.txt
-
 
 # Make port 80 and 8080 available to the world outside this container
 EXPOSE 80
