@@ -12,25 +12,18 @@
     </div>
 </div>
 
-<!-- Add Model Modal -->
-<div class="modal fade" id="addModelModal" tabindex="-1" aria-labelledby="addModelModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="addModelModalLabel">Add New Model</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="addModelForm">
-          <div class="mb-3">
+<!-- Add Model Form -->
+<div id="add-model-form" class="mt-4" style="display: none;">
+    <h3>Download New Model</h3>
+    <form id="newModelForm">
+        <div class="mb-3">
             <label for="modelRepo" class="form-label">HuggingFace Repository</label>
             <input type="text" class="form-control" id="modelRepo" required>
-          </div>
-          <button type="submit" class="btn btn-primary">Download</button>
-        </form>
-      </div>
-    </div>
-  </div>
+            <small class="form-text text-muted">Enter the HuggingFace repository name (e.g., "facebook/opt-350m")</small>
+        </div>
+        <button type="submit" class="btn btn-primary">Download</button>
+        <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
+    </form>
 </div>
 
 <!-- Download Status Modal -->
@@ -55,83 +48,71 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
 <script>
+    const socket = io();
     let models = [];
 
     function createModelCards(data) {
         const container = document.getElementById('models-container');
         container.innerHTML = '';
-        if (data.length === 0) {
-            container.innerHTML = '<p>No models found.</p>';
-            return;
-        }
-        data.forEach(model => {
+        data.forEach(item => {
             const card = document.createElement('div');
             card.className = 'col-md-4 mb-4';
             card.innerHTML = `
                 <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title">${model.name}</h5>
-                        <div class="progress mb-3">
-                            <div class="progress-bar" role="progressbar" style="width: ${model.progress}%;" aria-valuenow="${model.progress}" aria-valuemin="0" aria-valuemax="100">${model.progress}%</div>
-                        </div>
-                        <div class="status-label ${model.progress === 100 ? 'text-success' : 'visually-hidden'}">
-                            Downloaded
-                        </div>
+                    <div class="image-container">
+                        <div class="image"></div>
                     </div>
+                    <div class="tag">
+                        <span>Downloaded</span>
+                    </div>
+                    <div class="publication-date">
+                        <span>Created: ${item.created}</span>
+                    </div>
+                    <h1>${item.path}</h1>
+                    <p>
+                        Location: /mnt/models/hub/${item.path}
+                    </p>
                 </div>
             `;
             container.appendChild(card);
         });
     }
 
-    function updateModelProgress(modelName, progress) {
-        const modelCard = document.querySelector(`.card-title:contains('${modelName}')`).closest('.card');
-        if (modelCard) {
-            const progressBar = modelCard.querySelector('.progress-bar');
-            const statusLabel = modelCard.querySelector('.status-label');
-            
-            progressBar.style.width = `${progress}%`;
-            progressBar.setAttribute('aria-valuenow', progress);
-            progressBar.textContent = `${progress}%`;
-            
-            if (progress === 100) {
-                statusLabel.classList.remove('visually-hidden');
-                statusLabel.classList.add('text-success');
-                progressBar.classList.add('visually-hidden');
-            } else {
-                statusLabel.classList.add('visually-hidden');
-                statusLabel.classList.remove('text-success');
-                progressBar.classList.remove('visually-hidden');
-            }
-        }
-    }
-
     function filterModels() {
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
         const filteredModels = models.filter(model => 
-            model.name.toLowerCase().includes(searchTerm)
+            model.path.toLowerCase().includes(searchTerm)
         );
         createModelCards(filteredModels);
     }
 
-    function showAddModelModal() {
-        const modal = new bootstrap.Modal(document.getElementById('addModelModal'));
-        modal.show();
+    function showAddModelForm() {
+        document.getElementById('models-container').style.display = 'none';
+        document.getElementById('add-model-form').style.display = 'block';
+        document.getElementById('modelSearch').style.display = 'none';
+        document.getElementById('addModelBtn').style.display = 'none';
+    }
+
+    function hideAddModelForm() {
+        document.getElementById('models-container').style.display = 'flex';
+        document.getElementById('add-model-form').style.display = 'none';
+        document.getElementById('modelSearch').style.display = 'block';
+        document.getElementById('addModelBtn').style.display = 'block';
+        document.getElementById('newModelForm').reset();
     }
 
     function downloadModel(e) {
         e.preventDefault();
         const modelRepo = document.getElementById('modelRepo').value;
-        const addModelModal = bootstrap.Modal.getInstance(document.getElementById('addModelModal'));
-        addModelModal.hide();
 
-        const downloadStatusModal = new bootstrap.Modal(document.getElementById('downloadStatusModal'));
-        downloadStatusModal.show();
+        // Show the status modal
+        const modal = new bootstrap.Modal(document.getElementById('downloadStatusModal'));
+        modal.show();
         document.getElementById('downloadStatusBody').innerHTML = '';
         document.getElementById('downloadSpinner').style.display = 'block';
 
+        // Start the download
         fetch('/api/download-model', {
             method: 'POST',
             headers: {
@@ -141,73 +122,244 @@
         }).then(response => response.json())
           .then(data => {
               if (data.error) {
-                  addStatusMessage(data.error, 'error');
+                  const statusBody = document.getElementById('downloadStatusBody');
+                  const errorMessage = document.createElement('p');
+                  errorMessage.textContent = data.error;
+                  errorMessage.classList.add('error');
+                  statusBody.appendChild(errorMessage);
                   document.getElementById('downloadSpinner').style.display = 'none';
               }
           });
     }
 
-    function addStatusMessage(message, status = 'info') {
+    // Socket.IO event handlers
+    socket.on('download_status', function(data) {
         const statusBody = document.getElementById('downloadStatusBody');
         const statusMessage = document.createElement('p');
-        statusMessage.textContent = message;
-        statusMessage.classList.add(status);
+        statusMessage.textContent = data.message;
+        statusMessage.classList.add(data.status);
         statusBody.appendChild(statusMessage);
 
-        if (status === 'error' || message.includes('completed')) {
+        if (data.final) {
             document.getElementById('downloadSpinner').style.display = 'none';
+            if (data.status === 'success') {
+                statusMessage.style.color = 'green';
+                statusMessage.style.fontWeight = 'bold';
+                fetchModels();  // Refresh the model list
+            }
         }
-    }
-
-    const socket = io();
-    socket.on('download_status', function(data) {
-        addStatusMessage(data.message, data.error ? 'error' : 'info');
-        if (data.complete || data.error) {
-            fetchModels();
-        }
-    });
-
-    socket.on('download_progress', function(data) {
-        updateModelProgress(data.model, data.progress);
     });
 
     function fetchModels() {
-        fetch('/api/list-models')
+        fetch('/api/model-directories')
             .then(response => response.json())
             .then(data => {
                 models = data;
-                createModelCards(models);
+                createModelCards(data);
             });
     }
 
-    // Refresh model progress every 5 seconds
-    setInterval(fetchModels, 5000);
-
     // Event Listeners
     document.getElementById('modelSearch').addEventListener('input', filterModels);
-    document.getElementById('addModelBtn').addEventListener('click', showAddModelModal);
-    document.getElementById('addModelForm').addEventListener('submit', downloadModel);
+    document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
+    document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
+    document.getElementById('newModelForm').addEventListener('submit', downloadModel);
 
-    // Initial fetch
+    // Initial load
     fetchModels();
-
-    // Helper function to find elements containing text
-    jQuery.expr[':'].contains = function(a, i, m) {
-        return jQuery(a).text().toUpperCase().indexOf(m[3].toUpperCase()) >= 0;
-    };
 </script>
 {% endblock %}
 
 {% block styles %}
 <style>
-    .info {
-        color: blue;
+    /* Container Styles */
+    #models-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: start;
+        gap: 20px;
     }
-    .error {
-        color: red;
+
+    .col-md-4 {
+        display: flex;
+        justify-content: center;
     }
-    .status-label {
+
+    /* Card Styles */
+    .card {
+        --push: 8px;
+        min-width: 320px;
+        max-width: 320px;
+        border: 1px solid black;
+        border-radius: 12px;
+        padding: 20px;
+        background-color: white;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        cursor: pointer;
+        position: relative;
+        transition: box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
+        box-shadow: var(--push) var(--push) 0 0 black;
+        will-change: box-shadow, transform;
+        height: 100%;
+    }
+
+    .card:active {
+        box-shadow: 0 0 0 0 black;
+        transform: translate(var(--push), var(--push));
+    }
+
+    .card:not(:active):hover {
+        --push: 4px;
+        box-shadow: var(--push) var(--push) 0 0 black;
+        transform: translate(var(--push), var(--push));
+    }
+
+    /* Image Container Styles */
+    .image-container {
+        background-color: SandyBrown;
+        width: 100%;
+        height: 160px;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .image {
+        background-image: url("https://cdn.dribbble.com/users/1186668/screenshots/17303363/media/bc6aa9915a58811524bbbfd89cbb2d71.jpg");
+        background-position: center;
+        background-size: 100%;
+        background-repeat: no-repeat;
+        height: 100%;
+        width: 100%;
+    }
+
+    /* Tag Styles */
+    .tag {
+        background-color: SandyBrown;
+        align-self: flex-start;
+        border-radius: 4px;
+        padding: 8px 10px;
+        font-size: 12px;
         font-weight: bold;
+        letter-spacing: 0.25px;
+    }
+
+    /* Title Styles */
+    .card h1 {
+        margin: 8px 0;
+        font-size: 20px;
+        word-wrap: break-word;
+    }
+
+    /* Publication Date Styles */
+    .publication-date {
+        font-size: 14px;
+        color: rgba(0, 0, 0, 0.75);
+    }
+
+    /* Content Styles */
+    .card p {
+        margin: 0;
+        font-size: 14px;
+        color: rgba(0, 0, 0, 0.65);
+        line-height: 1.5;
+        word-wrap: break-word;
+    }
+
+    /* Form Styles */
+    #add-model-form {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    #newModelForm .form-label {
+        font-weight: bold;
+    }
+
+    #newModelForm .form-text {
+        color: rgba(0, 0, 0, 0.6);
+    }
+
+    /* Status Modal Styles */
+    #downloadStatusModal .modal-body {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    #downloadStatusBody {
+        font-family: monospace;
+    }
+
+    #downloadStatusBody p {
+        margin-bottom: 0.5rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+    }
+
+    /* Status Colors */
+    .info {
+        color: #0d6efd;
+        background-color: rgba(13, 110, 253, 0.1);
+    }
+
+    .success {
+        color: #198754;
+        background-color: rgba(25, 135, 84, 0.1);
+    }
+
+    .error {
+        color: #dc3545;
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+
+    /* Search Bar Styles */
+    #modelSearch {
+        padding: 10px 15px;
+        border-radius: 8px;
+        border: 1px solid #ced4da;
+        font-size: 16px;
+    }
+
+    #modelSearch:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    /* Spinner Styles */
+    #downloadSpinner {
+        margin: 20px 0;
+    }
+
+    .spinner-border {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    /* Button Styles */
+    .btn-primary {
+        padding: 10px 20px;
+        font-weight: 500;
+    }
+
+    .btn-secondary {
+        padding: 10px 20px;
+        margin-left: 10px;
+    }
+
+    /* Responsive Adjustments */
+    @media (max-width: 768px) {
+        .card {
+            min-width: 100%;
+        }
+
+        #add-model-form {
+            margin: 20px;
+        }
     }
 </style>
 {% endblock %}

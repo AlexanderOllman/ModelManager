@@ -4,19 +4,18 @@ import json
 import yaml
 import threading
 import time
-from flask_socketio import SocketIO
-import logging
 import os
-
-logging.basicConfig(level=logging.WARNING)
+import logging
+from flask_socketio import SocketIO
+from huggingface_hub import snapshot_download
 
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-download_progress = {}
-
 deployment_lock = threading.Lock()
 deployment_in_progress = False
+
+logging.basicConfig(level=logging.ERROR)
 
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
@@ -25,6 +24,48 @@ def run_kubectl_command(command):
 def check_runtime_exists(runtime_name):
     _, error = run_kubectl_command(f"kubectl get clusterservingruntime {runtime_name}")
     return "NotFound" not in error
+
+def check_deployment_status(namespace, model_name):
+    max_attempts = 30
+    attempt = 0
+    while attempt < max_attempts:
+        # Check pod status
+        pod_command = f"kubectl get pods -n {namespace} -l serving.kserve.io/inferenceservice={model_name} -o json"
+        pod_output, pod_error = run_kubectl_command(pod_command)
+        if pod_error:
+            socketio.emit('deployment_status', {'status': 'error', 'message': f"Error checking pod status: {pod_error}"})
+            return
+
+        pod_data = json.loads(pod_output)
+        if pod_data['items']:
+            pod_status = pod_data['items'][0]['status']['phase']
+            socketio.emit('deployment_status', {'status': 'info', 'message': f"Pod status: {pod_status}"})
+            
+            if pod_status == 'Running':
+                # Check InferenceService status
+                isvc_command = f"kubectl get inferenceservice {model_name} -n {namespace} -o json"
+                isvc_output, isvc_error = run_kubectl_command(isvc_command)
+                if isvc_error:
+                    socketio.emit('deployment_status', {'status': 'error', 'message': f"Error checking InferenceService status: {isvc_error}"})
+                    return
+
+                isvc_data = json.loads(isvc_output)
+                conditions = isvc_data.get('status', {}).get('conditions', [])
+                ready_condition = next((c for c in conditions if c['type'] == 'Ready'), None)
+                
+                if ready_condition:
+                    socketio.emit('deployment_status', {'status': 'info', 'message': f"InferenceService status: {ready_condition['status']}"})
+                    
+                    if ready_condition['status'] == 'True':
+                        socketio.emit('deployment_status', {'status': 'success', 'message': "Model deployed successfully!", 'final': True})
+                        deployment_in_progress = False
+                        return
+
+        attempt += 1
+        time.sleep(10)  # Wait for 10 seconds before checking again
+
+    socketio.emit('deployment_status', {'status': 'error', 'message': "Deployment timed out", 'final': True})
+    deployment_in_progress = False
 
 def deploy_runtime(runtime_yaml, runtime_name):
     global deployment_in_progress
@@ -62,9 +103,60 @@ def deploy_inference_service(inference_yaml, namespace):
         socketio.emit('deployment_status', {'status': 'error', 'message': f"Failed to deploy inference service: {error}"})
         return False
     
-    socketio.emit('deployment_status', {'status': 'success', 'message': "Inference service deployed successfully."})
+    socketio.emit('deployment_status', {'status': 'success', 'message': "Inference service deployment started."})
     return True
 
+def get_model_directories():
+    base_path = "/mnt/models/hub"
+    models = []
+    try:
+        for root, dirs, files in os.walk(base_path):
+            if root != base_path:  # Skip the base directory itself
+                rel_path = os.path.relpath(root, base_path)
+                if not rel_path.startswith('.'):  # Skip hidden directories
+                    models.append({
+                        "path": rel_path,
+                        "created": time.ctime(os.path.getctime(root))
+                    })
+    except Exception as e:
+        logging.error(f"Error reading model directories: {e}")
+    return models
+
+def download_model_files(model_repo):
+    try:
+        cache_dir = "/mnt/models/hub"
+        
+        # Initial status
+        socketio.emit('download_status', {
+            'status': 'info',
+            'message': f"Starting download of {model_repo}..."
+        })
+
+        # Download the model files
+        snapshot_download(
+            repo_id=model_repo,
+            cache_dir=cache_dir,
+            resume_download=True,
+            local_files_only=False,
+            allow_patterns=["*.safetensors", "*.json"]
+        )
+
+        # Success status
+        socketio.emit('download_status', {
+            'status': 'success',
+            'message': f"Model files successfully downloaded to {cache_dir}",
+            'final': True
+        })
+        
+    except Exception as e:
+        # Error status
+        socketio.emit('download_status', {
+            'status': 'error',
+            'message': f"Error downloading model: {str(e)}",
+            'final': True
+        })
+
+# Routes
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -83,6 +175,36 @@ def manage():
 def deploy():
     return render_template('deploy.html')
 
+@app.route('/download')
+def download_page():
+    return render_template('download.html')
+
+@app.route('/api/model-directories')
+def get_directories():
+    models = get_model_directories()
+    return jsonify(models)
+
+@app.route('/api/download-model', methods=['POST'])
+def start_download():
+    data = request.json
+    model_repo = data.get('model_repo')
+    
+    if not model_repo:
+        return jsonify({'error': 'Model repository name is required'}), 400
+
+    threading.Thread(target=download_model_files, args=(model_repo,)).start()
+    return jsonify({'message': 'Download started'})
+
+@app.route('/api/isvc')
+def get_isvc():
+    isvc_data, _ = run_kubectl_command("kubectl get isvc -A -o json")
+    return isvc_data
+
+@app.route('/api/clusterservingruntime')
+def get_clusterservingruntime():
+    csr_data, _ = run_kubectl_command("kubectl get clusterservingruntime -A -o json")
+    return csr_data
+
 @app.route('/api/pods')
 def get_pods():
     command = "kubectl get pods -A -l serving.kserve.io/inferenceservice -o json"
@@ -98,16 +220,6 @@ def get_pod_logs(namespace, pod_name):
     if error:
         return str(error), 500
     return logs
-
-@app.route('/api/isvc')
-def get_isvc():
-    isvc_data, _ = run_kubectl_command("kubectl get isvc -A -o json")
-    return jsonify(json.loads(isvc_data))
-
-@app.route('/api/clusterservingruntime')
-def get_clusterservingruntime():
-    csr_data, _ = run_kubectl_command("kubectl get clusterservingruntime -A -o json")
-    return jsonify(json.loads(csr_data))
 
 @app.route('/api/namespaces')
 def get_namespaces():
@@ -151,6 +263,7 @@ def deploy_model():
     runtime_yaml = yaml.safe_load(data['runtimeYaml'])
     runtime_name = data['runtime']
     namespace = data['namespace']
+    model_name = data['modelName']
     
     socketio.emit('deployment_status', {'status': 'info', 'message': "Starting deployment process..."})
     
@@ -163,28 +276,11 @@ def deploy_model():
         socketio.emit('deployment_status', {'status': 'info', 'message': "Runtime already exists. Proceeding with inference service deployment..."})
     
     if deploy_inference_service(inference_yaml, namespace):
-        deployment_in_progress = False
-        return jsonify({'status': 'success', 'message': 'Model deployed successfully.'})
+        threading.Thread(target=check_deployment_status, args=(namespace, model_name)).start()
+        return jsonify({'status': 'info', 'message': 'Deployment started. Checking status...'})
     else:
         deployment_in_progress = False
         return jsonify({'status': 'error', 'message': 'Inference service deployment failed.'})
-
-@app.route('/api/describe/<resource_type>/<resource_name>')
-def describe_resource(resource_type, resource_name):
-    namespace = request.args.get('namespace')
-    if resource_type == 'isvc':
-        command = f"kubectl describe inferenceservice {resource_name}"
-        if namespace:
-            command += f" -n {namespace}"
-    elif resource_type == 'csr':
-        command = f"kubectl describe clusterservingruntime {resource_name}"
-    else:
-        return jsonify({'error': 'Invalid resource type'}), 400
-
-    description, error = run_kubectl_command(command)
-    if error:
-        return jsonify({'error': error}), 400
-    return jsonify({'description': description})
 
 @app.route('/api/delete/<resource_type>/<resource_name>', methods=['DELETE'])
 def delete_resource(resource_type, resource_name):
@@ -202,92 +298,6 @@ def delete_resource(resource_type, resource_name):
     if error:
         return jsonify({'success': False, 'error': error}), 500
     return jsonify({'success': True, 'message': f'{resource_type.upper()} {resource_name} deleted successfully'})
-
-
-def get_dir_size(path):
-    total_size = 0
-    for dirpath, dirnames, filenames in os.walk(path):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            total_size += os.path.getsize(fp)
-    return total_size
-
-@app.route('/download')
-def download_page():
-    return render_template('download.html')
-
-@app.route('/api/list-models')
-def list_models():
-    models_path = "/mnt/models"
-    models = []
-    try:
-        for root, dirs, files in os.walk(models_path):
-            for dir in dirs:
-                relative_path = os.path.relpath(os.path.join(root, dir), models_path)
-                models.append({
-                    'name': relative_path,
-                    'progress': download_progress.get(relative_path, 100 if os.path.exists(os.path.join(models_path, relative_path)) else 0)
-                })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-    return jsonify(models)
-
-@app.route('/api/download-model', methods=['POST'])
-def download_model():
-    model_repo = request.json.get('model_repo')
-    if not model_repo:
-        return jsonify({'error': 'Model repository not provided'}), 400
-
-    pvc_mount_path = f"/mnt/models/{model_repo}"
-    repo_url = f"https://huggingface.co/{model_repo}"
-
-    def download_process():
-        try:
-            if not os.path.exists(pvc_mount_path):
-                socketio.emit('download_status', {'message': f"Creating directory {pvc_mount_path}"})
-                os.makedirs(pvc_mount_path)
-
-            if not os.listdir(pvc_mount_path):
-                socketio.emit('download_status', {'message': f"Cloning repository {repo_url} into {pvc_mount_path}"})
-                process = subprocess.Popen(
-                    ["git", "clone", repo_url, pvc_mount_path],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=True
-                )
-
-                total_objects = None
-                received_objects = 0
-
-                for line in process.stdout:
-                    if "remote: Counting objects:" in line:
-                        total_objects = int(line.split()[3])
-                    elif "Receiving objects:" in line and "%" in line:
-                        received_objects = int(line.split()[2].split('/')[0])
-                        progress = int((received_objects / total_objects) * 100) if total_objects else 0
-                        download_progress[model_repo] = progress
-                        socketio.emit('download_progress', {'model': model_repo, 'progress': progress})
-
-                process.wait()
-                if process.returncode != 0:
-                    raise subprocess.CalledProcessError(process.returncode, process.args)
-
-                download_progress[model_repo] = 100
-                socketio.emit('download_progress', {'model': model_repo, 'progress': 100})
-                socketio.emit('download_status', {'message': "Model repository successfully cloned."})
-            else:
-                socketio.emit('download_status', {'message': "Repository already exists in PVC, skipping clone."})
-
-            socketio.emit('download_status', {'message': "Download process completed.", 'complete': True})
-        except subprocess.CalledProcessError as e:
-            socketio.emit('download_status', {'message': f"Error during git operation: {str(e)}", 'error': True})
-        except Exception as e:
-            socketio.emit('download_status', {'message': f"An error occurred: {str(e)}", 'error': True})
-
-    thread = threading.Thread(target=download_process)
-    thread.start()
-
-    return jsonify({'message': 'Download process started'})
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')
