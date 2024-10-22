@@ -24,7 +24,9 @@ RUN apt-get update && \
 COPY . /app
 
 # Ensure any Python dependencies in requirements.txt are installed
-RUN pip3 install --no-cache-dir -r requirements.txt
+# RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install -r requirements.txt
+
 
 # Make port 80 and 8080 available to the world outside this container
 EXPOSE 80
