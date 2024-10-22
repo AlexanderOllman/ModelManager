@@ -7,7 +7,10 @@ import time
 import os
 import logging
 from flask_socketio import SocketIO
-from huggingface_hub import snapshot_download
+from huggingface_hub import snapshot_download, logging as hf_logging
+import sys
+import contextlib
+import io
 
 app = Flask(__name__)
 socketio = SocketIO(app)
