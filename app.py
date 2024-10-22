@@ -7,7 +7,7 @@ import time
 import os
 import logging
 from flask_socketio import SocketIO
-from huggingface_hub import snapshot_download, logging as hf_logging
+from huggingface_hub import snapshot_download, logging as hf_logging, HfApi
 import sys
 import contextlib
 import io
@@ -25,7 +25,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create a custom handler for HuggingFace logging
+# Set HuggingFace Hub logging to INFO level
+hf_logging.set_verbosity_info()
+
 class HFLoggingHandler(logging.Handler):
     def __init__(self, callback):
         super().__init__()
@@ -44,8 +46,6 @@ class StringIOWithCallback(io.StringIO):
         super().write(s)
         if s.strip():  # Only send non-empty lines
             self.callback(s.strip())
-
-
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
     return result.stdout, result.stderr
@@ -354,7 +354,17 @@ def download_model():
             hf_handler = HFLoggingHandler(lambda msg: next(send_log(msg)))
             hf_logger = logging.getLogger("huggingface_hub")
             hf_logger.addHandler(hf_handler)
-            hf_logger.setLevel(logging.INFO)
+
+            # Get model info
+            api = HfApi()
+            try:
+                logger.info(f"Fetching model info for {model_repo}")
+                yield f"data: Fetching model info for {model_repo}\n\n"
+                model_info = api.model_info(model_repo)
+                yield f"data: Model size: {model_info.siblings_size_human_readable}\n\n"
+            except Exception as e:
+                logger.warning(f"Could not fetch model info: {e}")
+                yield f"data: Could not fetch model size information\n\n"
 
             # Capture stdout and stderr
             stdout_callback = StringIOWithCallback(lambda msg: next(send_log(f"stdout: {msg}")))
@@ -372,7 +382,7 @@ def download_model():
                     cache_dir=cache_dir,
                     local_files_only=False,
                     allow_patterns=["*.safetensors", "*.json"],
-                    verbose=True
+                    token=None  # Add your token here if needed for private repos
                 )
                 
                 logger.info(f"Download completed. Files stored at: {result}")
@@ -384,6 +394,12 @@ def download_model():
                     files = os.listdir(result)
                     logger.info(f"Downloaded files: {files}")
                     yield f"data: Downloaded files: {', '.join(files)}\n\n"
+                    
+                    # Calculate total size of downloaded files
+                    total_size = sum(os.path.getsize(os.path.join(result, f)) for f in files)
+                    size_mb = total_size / (1024 * 1024)
+                    logger.info(f"Total downloaded size: {size_mb:.2f} MB")
+                    yield f"data: Total downloaded size: {size_mb:.2f} MB\n\n"
                 except Exception as e:
                     logger.error(f"Error listing downloaded files: {e}")
                     yield f"data: Error listing downloaded files: {str(e)}\n\n"
@@ -395,6 +411,11 @@ def download_model():
             error_msg = f"Error downloading model: {str(e)}"
             logger.error(error_msg, exc_info=True)
             yield f"data: {error_msg}\n\n"
+            # Log the full traceback
+            import traceback
+            tb = traceback.format_exc()
+            logger.error(f"Full traceback:\n{tb}")
+            yield f"data: Full error details: {tb}\n\n"
         finally:
             # Clean up the HuggingFace logging handler
             hf_logger.removeHandler(hf_handler)
