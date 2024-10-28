@@ -58,6 +58,149 @@
 </div>
 {% endblock %}
 
+
+{% block scripts %}
+<script>
+    function createModelCards(data) {
+        const container = document.getElementById('models-container');
+        container.innerHTML = '';
+        if (data.length === 0) {
+            container.innerHTML = '<p>No models found.</p>';
+            return;
+        }
+        data.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'col-md-4 mb-4';
+            card.innerHTML = `
+                <div class="card">
+                    <div class="image-container">
+                        <div class="image"></div>
+                    </div>
+                    <div class="tag">
+                        <span>Downloaded</span>
+                    </div>
+                    <div class="publication-date">
+                        <span>Location: /mnt/models/hub</span>
+                    </div>
+                    <h1>${item.repo_name}</h1>
+                    <div class="repo-info">
+                        <span class="full-repo-path">${item.full_repo}</span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function filterModels() {
+        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+        document.querySelectorAll('#models-container .col-md-4').forEach(card => {
+            const repoName = card.querySelector('h1').textContent.toLowerCase();
+            const fullRepo = card.querySelector('.full-repo-path').textContent.toLowerCase();
+            if (repoName.includes(searchTerm) || fullRepo.includes(searchTerm)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    function showAddModelForm() {
+        document.getElementById('models-container').style.display = 'none';
+        document.getElementById('add-model-form').style.display = 'block';
+        document.getElementById('modelSearch').style.display = 'none';
+        document.getElementById('addModelBtn').style.display = 'none';
+    }
+
+    function hideAddModelForm() {
+        document.getElementById('models-container').style.display = 'flex';
+        document.getElementById('add-model-form').style.display = 'none';
+        document.getElementById('modelSearch').style.display = 'block';
+        document.getElementById('addModelBtn').style.display = 'block';
+        document.getElementById('newModelForm').reset();
+    }
+
+    function downloadModel(modelRepo) {
+        const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
+        const statusBody = document.getElementById('downloadStatusBody');
+        const spinner = document.getElementById('downloadSpinner');
+        statusBody.innerHTML = '';
+        spinner.style.display = 'block';
+        modal.show();
+
+        const eventSource = new EventSource(`/api/download-model?repo=${encodeURIComponent(modelRepo)}`);
+
+        eventSource.onmessage = function(event) {
+            const message = document.createElement('p');
+            const text = event.data;
+            
+            if (text.startsWith('stdout:')) {
+                message.classList.add('stdout');
+            } else if (text.startsWith('stderr:')) {
+                message.classList.add('stderr');
+            } else if (text.includes('Error')) {
+                message.classList.add('error');
+            } else {
+                message.classList.add('info');
+            }
+
+            message.textContent = text;
+            statusBody.appendChild(message);
+            statusBody.scrollTop = statusBody.scrollHeight;
+
+            if (text.includes('Download process complete') || text.includes('Error')) {
+                eventSource.close();
+                spinner.style.display = 'none';
+                
+                if (!text.includes('Error')) {
+                    setTimeout(() => {
+                        fetchModels();
+                    }, 1000);
+                }
+            }
+        };
+
+        eventSource.onerror = function(error) {
+            eventSource.close();
+            const errorMessage = document.createElement('p');
+            errorMessage.textContent = 'Connection error occurred';
+            errorMessage.classList.add('error');
+            statusBody.appendChild(errorMessage);
+            spinner.style.display = 'none';
+        };
+    }
+
+    document.getElementById('downloadCopyLogs').addEventListener('click', function() {
+        const logs = Array.from(document.getElementById('downloadStatusBody').children)
+            .map(p => p.textContent)
+            .join('\n');
+        navigator.clipboard.writeText(logs).then(() => {
+            alert('Logs copied to clipboard!');
+        });
+    });
+
+    function fetchModels() {
+        fetch('/api/list-models')
+            .then(response => response.json())
+            .then(data => createModelCards(data));
+    }
+
+    // Event Listeners
+    document.getElementById('modelSearch').addEventListener('input', filterModels);
+    document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
+    document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
+    document.getElementById('newModelForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const modelRepo = document.getElementById('modelRepo').value;
+        hideAddModelForm();
+        downloadModel(modelRepo);
+    });
+
+    // Initial load
+    fetchModels();
+</script>
+{% endblock %}
+
 {% block styles %}
 <style>
     .card {
@@ -205,146 +348,4 @@
         }
     }
 </style>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    function createModelCards(data) {
-        const container = document.getElementById('models-container');
-        container.innerHTML = '';
-        if (data.length === 0) {
-            container.innerHTML = '<p>No models found.</p>';
-            return;
-        }
-        data.forEach(item => {
-            const card = document.createElement('div');
-            card.className = 'col-md-4 mb-4';
-            card.innerHTML = `
-                <div class="card">
-                    <div class="image-container">
-                        <div class="image"></div>
-                    </div>
-                    <div class="tag">
-                        <span>Downloaded</span>
-                    </div>
-                    <div class="publication-date">
-                        <span>Location: /mnt/models/hub</span>
-                    </div>
-                    <h1>${item.repo_name}</h1>
-                    <div class="repo-info">
-                        <span class="full-repo-path">${item.full_repo}</span>
-                    </div>
-                </div>
-            `;
-            container.appendChild(card);
-        });
-    }
-
-    function filterModels() {
-        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        document.querySelectorAll('#models-container .col-md-4').forEach(card => {
-            const repoName = card.querySelector('h1').textContent.toLowerCase();
-            const fullRepo = card.querySelector('.full-repo-path').textContent.toLowerCase();
-            if (repoName.includes(searchTerm) || fullRepo.includes(searchTerm)) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
-        });
-    }
-
-    function showAddModelForm() {
-        document.getElementById('models-container').style.display = 'none';
-        document.getElementById('add-model-form').style.display = 'block';
-        document.getElementById('modelSearch').style.display = 'none';
-        document.getElementById('addModelBtn').style.display = 'none';
-    }
-
-    function hideAddModelForm() {
-        document.getElementById('models-container').style.display = 'flex';
-        document.getElementById('add-model-form').style.display = 'none';
-        document.getElementById('modelSearch').style.display = 'block';
-        document.getElementById('addModelBtn').style.display = 'block';
-        document.getElementById('newModelForm').reset();
-    }
-
-    function downloadModel(modelRepo) {
-        const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
-        const statusBody = document.getElementById('downloadStatusBody');
-        const spinner = document.getElementById('downloadSpinner');
-        statusBody.innerHTML = '';
-        spinner.style.display = 'block';
-        modal.show();
-
-        const eventSource = new EventSource(`/api/download-model?repo=${encodeURIComponent(modelRepo)}`);
-
-        eventSource.onmessage = function(event) {
-            const message = document.createElement('p');
-            const text = event.data;
-            
-            if (text.startsWith('stdout:')) {
-                message.classList.add('stdout');
-            } else if (text.startsWith('stderr:')) {
-                message.classList.add('stderr');
-            } else if (text.includes('Error')) {
-                message.classList.add('error');
-            } else {
-                message.classList.add('info');
-            }
-
-            message.textContent = text;
-            statusBody.appendChild(message);
-            statusBody.scrollTop = statusBody.scrollHeight;
-
-            if (text.includes('Download process complete') || text.includes('Error')) {
-                eventSource.close();
-                spinner.style.display = 'none';
-                
-                if (!text.includes('Error')) {
-                    setTimeout(() => {
-                        fetchModels();
-                    }, 1000);
-                }
-            }
-        };
-
-        eventSource.onerror = function(error) {
-            eventSource.close();
-            const errorMessage = document.createElement('p');
-            errorMessage.textContent = 'Connection error occurred';
-            errorMessage.classList.add('error');
-            statusBody.appendChild(errorMessage);
-            spinner.style.display = 'none';
-        };
-    }
-
-    document.getElementById('downloadCopyLogs').addEventListener('click', function() {
-        const logs = Array.from(document.getElementById('downloadStatusBody').children)
-            .map(p => p.textContent)
-            .join('\n');
-        navigator.clipboard.writeText(logs).then(() => {
-            alert('Logs copied to clipboard!');
-        });
-    });
-
-    function fetchModels() {
-        fetch('/api/list-models')
-            .then(response => response.json())
-            .then(data => createModelCards(data));
-    }
-
-    // Event Listeners
-    document.getElementById('modelSearch').addEventListener('input', filterModels);
-    document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
-    document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
-    document.getElementById('newModelForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const modelRepo = document.getElementById('modelRepo').value;
-        hideAddModelForm();
-        downloadModel(modelRepo);
-    });
-
-    // Initial load
-    fetchModels();
-</script>
 {% endblock %}
