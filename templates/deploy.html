@@ -12,7 +12,6 @@
     </div>
 </div>
 
-<!-- Add Model Form -->
 <div id="add-model-form" class="mt-4" style="display: none;">
     <h3>Add New Model</h3>
     <div class="framework-selection mb-4">
@@ -49,20 +48,39 @@
         <div id="nvidia-nim-form" class="framework-form" style="display: none;">
             <div class="mb-3">
                 <label for="modelName" class="form-label">Model Name</label>
-                <input type="text" class="form-control" id="modelName" required>
+                <input type="text" class="form-control" id="modelName" name="modelName" required>
             </div>
             <div class="mb-3">
                 <label for="containerImage" class="form-label">Container Path</label>
-                <input type="text" class="form-control" id="containerImage" required>
+                <input type="text" class="form-control" id="containerImage" name="containerImage" required>
             </div>
             <div class="mb-3">
                 <label for="storageUri" class="form-label">Storage URI</label>
-                <input type="text" class="form-control" id="storageUri" value="pvc://models-pvc" required>
+                <input type="text" class="form-control" id="storageUri" name="storageUri" value="pvc://models-pvc" required>
             </div>
             <div class="mb-3">
                 <label for="namespace" class="form-label">Namespace</label>
-                <input type="text" class="form-control" id="namespace" autocomplete="off" required>
+                <input type="text" class="form-control" id="namespace" name="namespace" autocomplete="off" required>
                 <ul id="namespaceDropdown" class="dropdown-menu" style="display: none;"></ul>
+            </div>
+            
+            <div class="mb-3">
+                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#nimAdvancedOptions" aria-expanded="false">
+                    Advanced Options
+                </button>
+                <div class="collapse" id="nimAdvancedOptions">
+                    <div class="card card-body">
+                        <div class="mb-3">
+                            <label for="nimQuantization" class="form-label">Quantization</label>
+                            <select class="form-select" id="nimQuantization" name="quantization">
+                                <option value="16" selected>FP16</option>
+                                <option value="8">FP8</option>
+                                <option value="4">FP4</option>
+                                <option value="2">FP2</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -70,7 +88,7 @@
         <div id="vllm-form" class="framework-form" style="display: none;">
             <div class="mb-3">
                 <label for="vllmModel" class="form-label">Model</label>
-                <select class="form-select" id="vllmModel" required>
+                <select class="form-select" id="vllmModel" name="vllmModel" required>
                     <option value="">Select a model</option>
                     <option value="other">Other</option>
                 </select>
@@ -80,35 +98,52 @@
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="vllmModelName" class="form-label">Model Name</label>
-                            <input type="text" class="form-control" id="vllmModelName" placeholder="e.g. meta/llama3-8b-instruct">
+                            <input type="text" class="form-control" id="vllmModelName" name="vllmModelName" 
+                                   placeholder="e.g. meta/llama3-8b-instruct">
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mb-3">
                             <label for="vllmStorageUri" class="form-label">Storage URI</label>
-                            <input type="text" class="form-control" id="vllmStorageUri" value="pvc://models-pvc">
+                            <input type="text" class="form-control" id="vllmStorageUri" name="vllmStorageUri" 
+                                   value="pvc://models-pvc">
                         </div>
                     </div>
                 </div>
             </div>
             <div class="mb-3">
                 <label for="vllmDeployName" class="form-label">Model Name</label>
-                <input type="text" class="form-control" id="vllmDeployName" required>
+                <input type="text" class="form-control" id="vllmDeployName" name="vllmDeployName" required>
             </div>
             <div class="mb-3">
                 <label for="vllmContainerImage" class="form-label">Container Image</label>
-                <input type="text" class="form-control" id="vllmContainerImage" value="vllm/vllm-openai:latest" required readonly>
+                <input type="text" class="form-control" id="vllmContainerImage" name="vllmContainerImage" 
+                       value="vllm/vllm-openai:latest" required readonly>
             </div>
             <div class="mb-3">
                 <label for="vllmNamespace" class="form-label">Namespace</label>
-                <input type="text" class="form-control" id="vllmNamespace" autocomplete="off" required>
+                <input type="text" class="form-control" id="vllmNamespace" name="vllmNamespace" autocomplete="off" required>
                 <ul id="vllmNamespaceDropdown" class="dropdown-menu" style="display: none;"></ul>
             </div>
-        </div>
 
-        <!-- Other Form -->
-        <div id="other-form" class="framework-form" style="display: none;">
-            <p>Coming soon...</p>
+            <div class="mb-3">
+                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#vllmAdvancedOptions" aria-expanded="false">
+                    Advanced Options
+                </button>
+                <div class="collapse" id="vllmAdvancedOptions">
+                    <div class="card card-body">
+                        <div class="mb-3">
+                            <label for="vllmQuantization" class="form-label">Quantization</label>
+                            <select class="form-select" id="vllmQuantization" name="quantization">
+                                <option value="16" selected>FP16</option>
+                                <option value="8">FP8</option>
+                                <option value="4">FP4</option>
+                                <option value="2">FP2</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Resources Section (common to all forms) -->
@@ -117,35 +152,19 @@
             <div class="mb-3">
                 <label for="modelSize" class="form-label">Model Size (in billions of parameters)</label>
                 <small class="form-text text-muted d-block">Below fields will be auto-populated with recommended resources based on size of model</small>
-                <input type="number" class="form-control" id="modelSize" required>
+                <input type="number" class="form-control" id="modelSize" name="modelSize" required>
             </div>
             <div class="mb-3">
                 <label for="cpuLimit" class="form-label">CPU Limit</label>
-                <input type="number" class="form-control" id="cpuLimit">
+                <input type="number" class="form-control" id="cpuLimit" name="cpuLimit" required>
             </div>
             <div class="mb-3">
                 <label for="memoryLimit" class="form-label">Memory Limit (Gi)</label>
-                <input type="number" class="form-control" id="memoryLimit">
+                <input type="number" class="form-control" id="memoryLimit" name="memoryLimit" required>
             </div>
             <div class="mb-3">
                 <label for="gpuLimit" class="form-label">GPU</label>
-                <input type="number" class="form-control" id="gpuLimit">
-            </div>
-        </div>
-        <div class="mb-3">
-            <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#advancedOptions" aria-expanded="false" aria-controls="advancedOptions">
-                Advanced Options
-            </button>
-            <div class="collapse" id="advancedOptions">
-                    <div class="mb-3">
-                        <label for="quantization" class="form-label">Quantization</label>
-                        <select class="form-select" id="quantization">
-                            <option value="16" selected>FP16</option>
-                            <option value="8">FP8</option>
-                            <option value="4">FP4</option>
-                            <option value="2">FP2</option>
-                        </select>
-                </div>
+                <input type="number" class="form-control" id="gpuLimit" name="gpuLimit" required>
             </div>
         </div>
 
@@ -154,6 +173,7 @@
     </form>
 </div>
 
+<!-- Modals -->
 <!-- Other Model Warning Modal -->
 <div class="modal fade" id="otherModelModal" tabindex="-1">
     <div class="modal-dialog">
@@ -193,6 +213,7 @@
     </div>
 </div>
 {% endblock %}
+
 
 {% block styles %}
 <style>
@@ -325,422 +346,477 @@
     const socket = io();
 
     socket.on('deployment_status', function(data) {
-        const statusBody = document.getElementById('deploymentStatusBody');
-        const statusMessage = document.createElement('p');
-        statusMessage.textContent = data.message;
-        statusMessage.classList.add(`status-${data.status}`);
-        statusBody.appendChild(statusMessage);
-        statusBody.scrollTop = statusBody.scrollHeight;
+    const statusBody = document.getElementById('deploymentStatusBody');
+    const statusMessage = document.createElement('p');
+    statusMessage.textContent = data.message;
+    statusMessage.classList.add(`status-${data.status}`);
+    statusBody.appendChild(statusMessage);
+    statusBody.scrollTop = statusBody.scrollHeight;
 
-        if (data.final) {
-            document.getElementById('deploymentSpinner').style.display = 'none';
-            if (data.status === 'success') {
-                setTimeout(() => {
-                    window.location.href = '/models';
-                }, 2000);
+    if (data.final) {
+        document.getElementById('deploymentSpinner').style.display = 'none';
+        if (data.status === 'success') {
+            setTimeout(() => {
+                window.location.href = '/models';
+            }, 2000);
+        }
+    }
+});
+
+function createModelCards(data) {
+    const container = document.getElementById('models-container');
+    container.innerHTML = '';
+    if (data.length === 0) {
+        container.innerHTML = '<p>No models found.</p>';
+        return;
+    }
+    data.forEach(model => {
+        const card = document.createElement('div');
+        card.className = 'col-md-4 mb-4';
+        card.innerHTML = `
+            <div class="card">
+                <div class="image-container">
+                    <div class="image"></div>
+                </div>
+                <div class="tag">
+                    <span>${model.framework === 'vllm' ? 'vLLM' : 'NVIDIA NIM'}</span>
+                </div>
+                <div class="publication-date">
+                    <span>Added ${new Date(model.addedDate).toLocaleString()}</span>
+                </div>
+                <h1>${model.modelName}</h1>
+                <p>
+                    Namespace: ${model.namespace}<br>
+                    ${model.framework === 'vllm' ? 
+                        `Model: ${model.model}` : 
+                        `Storage URI: ${model.storageUri}`}
+                </p>
+                <div class="d-flex justify-content-between mt-3">
+                    <button class="btn btn-primary deploy-btn" data-model-name="${model.modelName}">Deploy</button>
+                    <button class="btn btn-danger delete-btn" data-model-name="${model.modelName}">Delete</button>
+                </div>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+
+    // Add event listeners
+    document.querySelectorAll('.deploy-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => deployModel(e.target.dataset.modelName));
+    });
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => showDeleteConfirmation(e.target.dataset.modelName));
+    });
+}
+
+function setupFrameworkSelection() {
+    const frameworkCards = document.querySelectorAll('.framework-card');
+    const forms = document.querySelectorAll('.framework-form');
+    const resourcesSection = document.getElementById('resources-section');
+
+    frameworkCards.forEach(card => {
+        card.addEventListener('click', function() {
+            // Remove selection from all cards
+            frameworkCards.forEach(c => c.classList.remove('selected'));
+            // Hide all forms
+            forms.forEach(f => f.style.display = 'none');
+            
+            // Select this card and show corresponding form
+            this.classList.add('selected');
+            const framework = this.dataset.framework;
+            const selectedForm = document.getElementById(`${framework}-form`);
+            if (selectedForm) {
+                selectedForm.style.display = 'block';
+                resourcesSection.style.display = 'block';
             }
+            
+            // Select the radio input
+            const radio = this.querySelector('input[type="radio"]');
+            if (radio) {
+                radio.checked = true;
+            }
+        });
+    });
+}
+
+function setupVLLMForm() {
+    const modelSelect = document.getElementById('vllmModel');
+    const customModelDiv = document.getElementById('vllmCustomModel');
+    const deployNameInput = document.getElementById('vllmDeployName');
+    const otherModelModal = new bootstrap.Modal(document.getElementById('otherModelModal'));
+
+    // Fetch available models and populate select
+    fetch('/api/list-models')
+        .then(response => response.json())
+        .then(data => {
+            availableModels = data;
+            data.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.full_repo;
+                option.textContent = model.full_repo;
+                modelSelect.insertBefore(option, modelSelect.lastElementChild);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching models:', error);
+        });
+
+    modelSelect.addEventListener('change', function() {
+        if (this.value === 'other') {
+            otherModelModal.show();
+        } else if (this.value) {
+            customModelDiv.style.display = 'none';
+            deployNameInput.value = this.value.toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
         }
     });
 
-    function createModelCards(data) {
-        const container = document.getElementById('models-container');
-        container.innerHTML = '';
-        if (data.length === 0) {
-            container.innerHTML = '<p>No models found.</p>';
-            return;
-        }
-        data.forEach(model => {
-            const card = document.createElement('div');
-            card.className = 'col-md-4 mb-4';
-            card.innerHTML = `
-                <div class="card">
-                    <div class="image-container">
-                        <div class="image"></div>
-                    </div>
-                    <div class="tag">
-                        <span>${model.framework === 'vllm' ? 'vLLM' : 'NVIDIA NIM'}</span>
-                    </div>
-                    <div class="publication-date">
-                        <span>Added ${new Date(model.addedDate).toLocaleString()}</span>
-                    </div>
-                    <h1>${model.modelName}</h1>
-                    <p>
-                        Namespace: ${model.namespace}<br>
-                        ${model.framework === 'vllm' ? 
-                            `Model: ${model.model}` : 
-                            `Storage URI: ${model.storageUri}`}
-                    </p>
-                    <div class="d-flex justify-content-between mt-3">
-                        <button class="btn btn-primary deploy-btn" data-model-name="${model.modelName}">Deploy</button>
-                        <button class="btn btn-danger delete-btn" data-model-name="${model.modelName}">Delete</button>
-                    </div>
-                </div>
-            `;
-            container.appendChild(card);
-        });
+    document.getElementById('continueCustomModel').addEventListener('click', function() {
+        customModelDiv.style.display = 'block';
+        otherModelModal.hide();
+    });
 
-        // Add event listeners
-        document.querySelectorAll('.deploy-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => deployModel(e.target.dataset.modelName));
-        });
-        document.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => deleteModel(e.target.dataset.modelName));
-        });
-    }
+    document.getElementById('cancelCustomModel').addEventListener('click', function() {
+        modelSelect.value = '';
+        customModelDiv.style.display = 'none';
+        otherModelModal.hide();
+    });
+}
 
-    function setupFrameworkSelection() {
-        const frameworkCards = document.querySelectorAll('.framework-card');
-        const forms = document.querySelectorAll('.framework-form');
-        const resourcesSection = document.getElementById('resources-section');
-
-        frameworkCards.forEach(card => {
-            card.addEventListener('click', function() {
-                // Remove selection from all cards
-                frameworkCards.forEach(c => c.classList.remove('selected'));
-                // Hide all forms
-                forms.forEach(f => f.style.display = 'none');
-                
-                // Select this card and show corresponding form
-                this.classList.add('selected');
-                const framework = this.dataset.framework;
-                document.getElementById(`${framework}-form`).style.display = 'block';
-                resourcesSection.style.display = 'block';
-                
-                // Select the radio input
-                this.querySelector('input[type="radio"]').checked = true;
-            });
-        });
-    }
-
-    function setupVLLMForm() {
-        const modelSelect = document.getElementById('vllmModel');
-        const customModelDiv = document.getElementById('vllmCustomModel');
-        const deployNameInput = document.getElementById('vllmDeployName');
-        const otherModelModal = new bootstrap.Modal(document.getElementById('otherModelModal'));
-
-        // Fetch available models and populate select
-        fetch('/api/list-models')
-            .then(response => response.json())
-            .then(data => {
-                availableModels = data;
-                data.forEach(model => {
-                    const option = document.createElement('option');
-                    option.value = model.full_repo;
-                    option.textContent = model.full_repo;
-                    modelSelect.insertBefore(option, modelSelect.lastElementChild);
-                });
-            });
-
-        modelSelect.addEventListener('change', function() {
-            if (this.value === 'other') {
-                otherModelModal.show();
-            } else if (this.value) {
-                customModelDiv.style.display = 'none';
-                // Convert model name to lowercase and replace special chars with hyphens
-                deployNameInput.value = this.value.toLowerCase()
-                    .replace(/[^a-z0-9]+/g, '-')
-                    .replace(/^-+|-+$/g, '');
-            }
-        });
-
-        document.getElementById('continueCustomModel').addEventListener('click', function() {
-            customModelDiv.style.display = 'block';
-            otherModelModal.hide();
-        });
-
-        document.getElementById('cancelCustomModel').addEventListener('click', function() {
-            modelSelect.value = '';
-            customModelDiv.style.display = 'none';
-            otherModelModal.hide();
-        });
-    }
-
-    // Modify calculateResources to handle missing elements
-    function calculateResources() {
-        const modelSizeInput = document.getElementById('modelSize');
-        const quantizationSelect = document.getElementById('quantization');
-        
-        if (!modelSizeInput) return;
-        
-        const modelSize = parseFloat(modelSizeInput.value);
-        const quantization = quantizationSelect ? parseInt(quantizationSelect.value) : 16; // Default to FP16
-
-        if (isNaN(modelSize) || modelSize <= 0) {
-            return;
-        }
-
-        // Calculate CPU - approximately half a CPU core per billion parameters
-        const cpuLimit = Math.max(2, Math.ceil(modelSize / 2));
-        
-        // Calculate Memory - approximately 2GB per billion parameters
-        const memoryLimit = Math.max(4, Math.ceil(modelSize * 2));
-        
-        // Calculate GPU memory needed in MB
-        const gpuMemoryNeededMB = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6;
-        
-        // Update fields if they exist
-        const cpuInput = document.getElementById('cpuLimit');
-        const memoryInput = document.getElementById('memoryLimit');
-        
-        if (cpuInput) cpuInput.value = cpuLimit;
-        if (memoryInput) memoryInput.value = memoryLimit;
-
-        // Fetch GPU info if not already fetched
-        if (!gpuInfo || gpuInfo.length === 0) {
-            fetch('/api/gpu-info')
-                .then(response => response.json())
-                .then(data => {
-                    gpuInfo = data;
-                    calculateGPULimit(gpuMemoryNeededMB);
-                })
-                .catch(error => {
-                    console.error('Error fetching GPU info:', error);
-                });
-        } else {
-            calculateGPULimit(gpuMemoryNeededMB);
-        }
-    }
-
-    function calculateGPULimit(gpuMemoryNeededMB) {
-        let gpuLimit = 0;
-        let totalGpuMemory = 0;
-
-        // Skip the first entry if it contains headers
-        for (let i = 1; i < gpuInfo.length; i++) {
-            const node = gpuInfo[i];
-            const nodeGpuCount = parseInt(node.gpuCount) || 0;
-            const nodeGpuMemory = parseInt(node.gpuMemory) || 0;
-            const nodeGpuTotalMemory = nodeGpuCount * nodeGpuMemory;
-            
-            totalGpuMemory += nodeGpuTotalMemory;
-
-            if (totalGpuMemory >= gpuMemoryNeededMB && gpuLimit === 0) {
-                gpuLimit = Math.ceil(gpuMemoryNeededMB / nodeGpuMemory);
-            }
-        }
-
-        if (gpuLimit === 0 && totalGpuMemory > 0) {
-            gpuLimit = Math.ceil(gpuMemoryNeededMB / totalGpuMemory);
-        }
-
-        document.getElementById('gpuLimit').value = Math.max(1, gpuLimit);
-
-        // Log the calculations for debugging
-        console.log('GPU Calculations:', {
-            gpuMemoryNeededMB,
-            totalGpuMemory,
-            gpuLimit,
-            gpuInfo
-        });
-    }
-
-    function setupNamespaceDropdowns() {
-        const namespaceInputs = ['namespace', 'vllmNamespace'].map(id => document.getElementById(id));
-        
-        function populateNamespaceDropdown(input, dropdownId, filter = '') {
-            const dropdown = document.getElementById(dropdownId);
-            fetch('/api/namespaces')
-                .then(response => response.json())
-                .then(namespaces => {
-                    dropdown.innerHTML = '';
-                    const filteredNamespaces = namespaces.filter(ns => 
-                        ns.toLowerCase().includes(filter.toLowerCase())
-                    );
-                    filteredNamespaces.forEach(ns => {
-                        const li = document.createElement('li');
-                        li.innerHTML = `<a class="dropdown-item" href="#">${ns}</a>`;
-                        li.querySelector('a').addEventListener('click', (e) => {
-                            e.preventDefault();
-                            input.value = ns;
-                            dropdown.style.display = 'none';
-                        });
-                        dropdown.appendChild(li);
-                    });
-                    dropdown.style.display = filteredNamespaces.length > 0 ? 'block' : 'none';
-                });
-        }
-
-        namespaceInputs.forEach(input => {
-            if (!input) return;
-            const dropdownId = `${input.id}Dropdown`;
-            
-            input.addEventListener('focus', () => {
-                populateNamespaceDropdown(input, dropdownId, input.value);
-            });
-
-            input.addEventListener('input', () => {
-                populateNamespaceDropdown(input, dropdownId, input.value);
-            });
-
-            input.addEventListener('blur', () => {
-                setTimeout(() => {
-                    document.getElementById(dropdownId).style.display = 'none';
-                }, 200);
-            });
-        });
-    }
-
-    function deployModel(modelName) {
-        const model = models.find(m => m.modelName === modelName);
-        if (!model) return;
-
-        const deploymentStatusModal = new bootstrap.Modal(document.getElementById('deploymentStatusModal'));
-        document.getElementById('deploymentStatusBody').innerHTML = '';
-        document.getElementById('deploymentSpinner').style.display = 'block';
-        deploymentStatusModal.show();
-
-        const endpoint = model.framework === 'vllm' ? '/api/deploy-vllm' : '/api/deploy';
-        fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(model)
-        }).then(response => response.json())
-          .then(data => {
-              if (data.status === 'error') {
-                  const statusBody = document.getElementById('deploymentStatusBody');
-                  const errorMessage = document.createElement('p');
-                  errorMessage.textContent = data.message;
-                  errorMessage.classList.add('status-error');
-                  statusBody.appendChild(errorMessage);
-                  document.getElementById('deploymentSpinner').style.display = 'none';
-              }
-          });
-    }
-
-    function saveNewModel(e) {
-        e.preventDefault();
-        const framework = document.querySelector('input[name="framework"]:checked').value;
-        let newModel = null;
-
-        if (framework === 'vllm') {
-            const modelSelect = document.getElementById('vllmModel');
-            const modelValue = modelSelect.value;
-            const customModel = modelValue === 'other';
-
-            newModel = {
-                framework: 'vllm',
-                modelName: document.getElementById('vllmDeployName').value,
-                namespace: document.getElementById('vllmNamespace').value,
-                containerImage: document.getElementById('vllmContainerImage').value,
-                model: customModel ? document.getElementById('vllmModelName').value : modelValue,
-                storageUri: customModel ? document.getElementById('vllmStorageUri').value.replace('pvc://', '') : 'models-pvc',
-                resources: {
-                    cpu: document.getElementById('cpuLimit').value,
-                    memory: `${document.getElementById('memoryLimit').value}Gi`,
-                    gpu: document.getElementById('gpuLimit').value
-                },
-                addedDate: new Date().toISOString()
-            };
-        } else if (framework === 'nvidia-nim') {
-            newModel = {
-                framework: 'nvidia-nim',
-                modelName: document.getElementById('modelName').value,
-                namespace: document.getElementById('namespace').value,
-                containerImage: document.getElementById('containerImage').value,
-                storageUri: document.getElementById('storageUri').value,
-                resources: {
-                    cpu: document.getElementById('cpuLimit').value,
-                    memory: `${document.getElementById('memoryLimit').value}Gi`,
-                    gpu: document.getElementById('gpuLimit').value
-                },
-                addedDate: new Date().toISOString()
-            };
-        }
-
-        if (newModel) {
-            models.push(newModel);
-            localStorage.setItem('models', JSON.stringify(models));
-            hideAddModelForm();
-            createModelCards(models);
-        }
-    }
-
-    function showAddModelForm() {
-    document.getElementById('models-container').style.display = 'none';
-    document.getElementById('add-model-form').style.display = 'block';
-    document.getElementById('modelSearch').style.display = 'none';
-    document.getElementById('addModelBtn').style.display = 'none';
+function setupNamespaceDropdowns() {
+    const namespaceInputs = ['namespace', 'vllmNamespace'].map(id => document.getElementById(id));
     
-    // Fetch GPU info when form is shown
+    function populateNamespaceDropdown(input, dropdownId, filter = '') {
+        if (!input) return;
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return;
+        
+        fetch('/api/namespaces')
+            .then(response => response.json())
+            .then(namespaces => {
+                dropdown.innerHTML = '';
+                const filteredNamespaces = namespaces.filter(ns => 
+                    ns.toLowerCase().includes(filter.toLowerCase())
+                );
+                filteredNamespaces.forEach(ns => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<a class="dropdown-item" href="#">${ns}</a>`;
+                    li.querySelector('a').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        input.value = ns;
+                        dropdown.style.display = 'none';
+                    });
+                    dropdown.appendChild(li);
+                });
+                dropdown.style.display = filteredNamespaces.length > 0 ? 'block' : 'none';
+            })
+            .catch(error => {
+                console.error('Error fetching namespaces:', error);
+            });
+    }
+
+    namespaceInputs.forEach(input => {
+        if (!input) return;
+        const dropdownId = `${input.id}Dropdown`;
+        
+        input.addEventListener('focus', () => {
+            populateNamespaceDropdown(input, dropdownId, input.value);
+        });
+
+        input.addEventListener('input', () => {
+            populateNamespaceDropdown(input, dropdownId, input.value);
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                const dropdown = document.getElementById(dropdownId);
+                if (dropdown) {
+                    dropdown.style.display = 'none';
+                }
+            }, 200);
+        });
+    });
+}
+
+function calculateGPULimit(gpuMemoryNeededMB) {
+    let gpuLimit = 0;
+    let totalGpuMemory = 0;
+
+    // Skip the first entry if it contains headers
+    for (let i = 1; i < gpuInfo.length; i++) {
+        const node = gpuInfo[i];
+        const nodeGpuCount = parseInt(node.gpuCount) || 0;
+        const nodeGpuMemory = parseInt(node.gpuMemory) || 0;
+        const nodeGpuTotalMemory = nodeGpuCount * nodeGpuMemory;
+        
+        totalGpuMemory += nodeGpuTotalMemory;
+
+        if (totalGpuMemory >= gpuMemoryNeededMB && gpuLimit === 0) {
+            gpuLimit = Math.ceil(gpuMemoryNeededMB / nodeGpuMemory);
+        }
+    }
+
+    if (gpuLimit === 0 && totalGpuMemory > 0) {
+        gpuLimit = Math.ceil(gpuMemoryNeededMB / totalGpuMemory);
+    }
+
+    const gpuInput = document.getElementById('gpuLimit');
+    if (gpuInput) {
+        gpuInput.value = Math.max(1, gpuLimit);
+    }
+}
+
+function calculateResources() {
+    const modelSizeInput = document.getElementById('modelSize');
+    if (!modelSizeInput) return;
+
+    const modelSize = parseFloat(modelSizeInput.value);
+    if (isNaN(modelSize) || modelSize <= 0) return;
+
+    // Get the active framework
+    const activeFramework = document.querySelector('.framework-card.selected')?.dataset.framework;
+    if (!activeFramework) return;
+
+    // Get quantization value based on active framework
+    const quantizationSelect = document.getElementById(`${activeFramework}Quantization`);
+    const quantization = quantizationSelect ? parseInt(quantizationSelect.value) : 16;
+
+    // Calculate CPU - approximately half a CPU core per billion parameters
+    const cpuLimit = Math.max(2, Math.ceil(modelSize / 2));
+    
+    // Calculate Memory - approximately 2GB per billion parameters
+    const memoryLimit = Math.max(4, Math.ceil(modelSize * 2));
+    
+    // Calculate GPU memory needed in MB
+    const gpuMemoryNeededMB = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6;
+
+    // Update the form fields
+    const cpuInput = document.getElementById('cpuLimit');
+    const memoryInput = document.getElementById('memoryLimit');
+    
+    if (cpuInput) cpuInput.value = cpuLimit;
+    if (memoryInput) memoryInput.value = memoryLimit;
+
+    // Fetch GPU info if not already fetched
     if (!gpuInfo || gpuInfo.length === 0) {
         fetch('/api/gpu-info')
             .then(response => response.json())
             .then(data => {
                 gpuInfo = data;
-                console.log('Fetched GPU info:', gpuInfo);  // For debugging
+                calculateGPULimit(gpuMemoryNeededMB);
             })
             .catch(error => {
                 console.error('Error fetching GPU info:', error);
             });
+    } else {
+        calculateGPULimit(gpuMemoryNeededMB);
     }
 }
 
-    function hideAddModelForm() {
-        document.getElementById('models-container').style.display = 'flex';
-        document.getElementById('add-model-form').style.display = 'none';
-        document.getElementById('modelSearch').style.display = 'block';
-        document.getElementById('addModelBtn').style.display = 'block';
-        document.getElementById('newModelForm').reset();
-        document.querySelectorAll('.framework-card').forEach(card => card.classList.remove('selected'));
-        document.querySelectorAll('.framework-form').forEach(form => form.style.display = 'none');
-        document.getElementById('resources-section').style.display = 'none';
+function saveNewModel(e) {
+    e.preventDefault();
+    const framework = document.querySelector('input[name="framework"]:checked')?.value;
+    if (!framework) {
+        alert('Please select a framework');
+        return;
     }
 
-    function filterModels() {
-        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        document.querySelectorAll('#models-container .col-md-4').forEach(card => {
-            const name = card.querySelector('h1').textContent.toLowerCase();
-            const content = card.querySelector('p').textContent.toLowerCase();
-            if (name.includes(searchTerm) || content.includes(searchTerm)) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
-        });
+    let newModel = null;
+
+    if (framework === 'vllm') {
+        const modelSelect = document.getElementById('vllmModel');
+        const modelValue = modelSelect.value;
+        const customModel = modelValue === 'other';
+
+        newModel = {
+            framework: 'vllm',
+            modelName: document.getElementById('vllmDeployName').value,
+            namespace: document.getElementById('vllmNamespace').value,
+            containerImage: document.getElementById('vllmContainerImage').value,
+            model: customModel ? document.getElementById('vllmModelName').value : modelValue,
+            storageUri: customModel ? 
+                document.getElementById('vllmStorageUri').value.replace('pvc://', '') : 
+                'models-pvc',
+            resources: {
+                cpu: document.getElementById('cpuLimit').value,
+                memory: `${document.getElementById('memoryLimit').value}Gi`,
+                gpu: document.getElementById('gpuLimit').value
+            },
+            addedDate: new Date().toISOString()
+        };
+    } else if (framework === 'nvidia-nim') {
+        newModel = {
+            framework: 'nvidia-nim',
+            modelName: document.getElementById('modelName').value,
+            namespace: document.getElementById('namespace').value,
+            containerImage: document.getElementById('containerImage').value,
+            storageUri: document.getElementById('storageUri').value,
+            resources: {
+                cpu: document.getElementById('cpuLimit').value,
+                memory: `${document.getElementById('memoryLimit').value}Gi`,
+                gpu: document.getElementById('gpuLimit').value
+            },
+            addedDate: new Date().toISOString()
+        };
     }
 
-        // Add this new function
-    function setupResourceCalculation() {
-        const modelSizeInput = document.getElementById('modelSize');
-        const quantizationSelect = document.getElementById('quantization');
-        
-        if (modelSizeInput) {
-            modelSizeInput.addEventListener('input', () => {
-                calculateResources();
-            });
+    if (newModel) {
+        models.push(newModel);
+        localStorage.setItem('models', JSON.stringify(models));
+        hideAddModelForm();
+        createModelCards(models);
+    }
+}
+
+function deployModel(modelName) {
+    const model = models.find(m => m.modelName === modelName);
+    if (!model) return;
+
+    const deploymentStatusModal = new bootstrap.Modal(document.getElementById('deploymentStatusModal'));
+    document.getElementById('deploymentStatusBody').innerHTML = '';
+    document.getElementById('deploymentSpinner').style.display = 'block';
+    deploymentStatusModal.show();
+
+    const endpoint = model.framework === 'vllm' ? '/api/deploy-vllm' : '/api/deploy';
+    fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(model)
+    }).then(response => response.json())
+      .then(data => {
+          if (data.status === 'error') {
+              const statusBody = document.getElementById('deploymentStatusBody');
+              const errorMessage = document.createElement('p');
+              errorMessage.textContent = data.message;
+              errorMessage.classList.add('status-error');
+              statusBody.appendChild(errorMessage);
+              document.getElementById('deploymentSpinner').style.display = 'none';
+          }
+      })
+      .catch(error => {
+          console.error('Deployment error:', error);
+          const statusBody = document.getElementById('deploymentStatusBody');
+          const errorMessage = document.createElement('p');
+          errorMessage.textContent = `Error: ${error.message}`;
+          errorMessage.classList.add('status-error');
+          statusBody.appendChild(errorMessage);
+          document.getElementById('deploymentSpinner').style.display = 'none';
+      });
+}
+
+function showDeleteConfirmation(modelName) {
+    if (confirm(`Are you sure you want to delete ${modelName}?`)) {
+        const model = models.find(m => m.modelName === modelName);
+        if (model) {
+            models = models.filter(m => m.modelName !== modelName);
+            localStorage.setItem('models', JSON.stringify(models));
+            createModelCards(models);
         }
+    }
+}
 
+function showAddModelForm() {
+    document.getElementById('models-container').style.display = 'none';
+    document.getElementById('add-model-form').style.display = 'block';
+    document.getElementById('modelSearch').style.display = 'none';
+    document.getElementById('addModelBtn').style.display = 'none';
+}
+
+function hideAddModelForm() {
+    document.getElementById('models-container').style.display = 'flex';
+    document.getElementById('add-model-form').style.display = 'none';
+    document.getElementById('modelSearch').style.display = 'block';
+    document.getElementById('addModelBtn').style.display = 'block';
+    document.getElementById('newModelForm').reset();
+    document.querySelectorAll('.framework-card').forEach(card => card.classList.remove('selected'));
+    document.querySelectorAll('.framework-form').forEach(form => form.style.display = 'none');
+    document.getElementById('resources-section').style.display = 'none';
+    document.querySelectorAll('.collapse').forEach(collapse => {
+        if (collapse.classList.contains('show')) {
+            collapse.classList.remove('show');
+        }
+    });
+}
+
+function filterModels() {
+    const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+    document.querySelectorAll('#models-container .col-md-4').forEach(card => {
+        const name = card.querySelector('h1').textContent.toLowerCase();
+        const content = card.querySelector('p').textContent.toLowerCase();
+        if (name.includes(searchTerm) || content.includes(searchTerm)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function setupResourceCalculation() {
+    const modelSizeInput = document.getElementById('modelSize');
+    if (modelSizeInput) {
+        modelSizeInput.addEventListener('input', calculateResources);
+    }
+
+    // Add event listeners for both framework's quantization selects
+    ['nvidia-nim', 'vllm'].forEach(framework => {
+        const quantizationSelect = document.getElementById(`${framework}Quantization`);
         if (quantizationSelect) {
-            quantizationSelect.addEventListener('change', () => {
-                calculateResources();
-            });
+            quantizationSelect.addEventListener('change', calculateResources);
         }
-    }
+    });
+}
 
-
-    // Event Listeners
-    document.getElementById('modelSearch').addEventListener('input', filterModels);
-    document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
-    document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
-    document.getElementById('newModelForm').addEventListener('submit', saveNewModel);
-    document.getElementById('modelSize').addEventListener('input', calculateResources);
-    document.getElementById('quantization').addEventListener('change', calculateResources);
-
-    // Initialize everything
-    document.addEventListener('DOMContentLoaded', function() {
+// Event Listeners and Initialization
+document.addEventListener('DOMContentLoaded', function() {
     setupFrameworkSelection();
     setupVLLMForm();
     setupNamespaceDropdowns();
     setupResourceCalculation();
     
+    // Add event listeners for search and form
+    const modelSearchInput = document.getElementById('modelSearch');
+    if (modelSearchInput) {
+        modelSearchInput.addEventListener('input', filterModels);
+    }
+
+    const addModelBtn = document.getElementById('addModelBtn');
+    if (addModelBtn) {
+        addModelBtn.addEventListener('click', showAddModelForm);
+    }
+
+    const cancelAddModelBtn = document.getElementById('cancelAddModel');
+    if (cancelAddModelBtn) {
+        cancelAddModelBtn.addEventListener('click', hideAddModelForm);
+    }
+
+    const modelForm = document.getElementById('newModelForm');
+    if (modelForm) {
+        modelForm.addEventListener('submit', saveNewModel);
+    }
+
+    // Load saved models
     const savedModels = localStorage.getItem('models');
     if (savedModels) {
         models = JSON.parse(savedModels);
         createModelCards(models);
     }
+
+    // Fetch GPU info on page load
+    fetch('/api/gpu-info')
+        .then(response => response.json())
+        .then(data => {
+            gpuInfo = data;
+            console.log('Fetched GPU info:', gpuInfo);
+        })
+        .catch(error => {
+            console.error('Error fetching GPU info:', error);
+        });
 });
+</script>
+{% endblock %}
 
 </script>
 {% endblock %}
