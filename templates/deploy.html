@@ -437,6 +437,75 @@
         });
     }
 
+    function calculateResources() {
+        const modelSize = parseFloat(document.getElementById('modelSize').value);
+        const quantizationSelect = document.getElementById('quantization');
+        const quantization = quantizationSelect ? parseInt(quantizationSelect.value) : 16; // Default to FP16 if not found
+
+        if (isNaN(modelSize) || modelSize <= 0) {
+            return;
+        }
+
+        // Calculate CPU - approximately half a CPU core per billion parameters
+        const cpuLimit = Math.max(2, Math.ceil(modelSize / 2));
+        
+        // Calculate Memory - approximately 2GB per billion parameters
+        const memoryLimit = Math.max(4, Math.ceil(modelSize * 2));
+        
+        // Calculate GPU memory needed in MB
+        // Formula: GPUs = ((P * 4)/(32/FP) * 1.2)/1000000
+        const gpuMemoryNeededMB = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6;
+        
+        // Fetch GPU info if not already fetched
+        if (!gpuInfo || gpuInfo.length === 0) {
+            fetch('/api/gpu-info')
+                .then(response => response.json())
+                .then(data => {
+                    gpuInfo = data;
+                    calculateGPULimit(gpuMemoryNeededMB);
+                });
+        } else {
+            calculateGPULimit(gpuMemoryNeededMB);
+        }
+
+        // Update the form fields
+        document.getElementById('cpuLimit').value = cpuLimit;
+        document.getElementById('memoryLimit').value = memoryLimit;
+    }
+
+    function calculateGPULimit(gpuMemoryNeededMB) {
+        let gpuLimit = 0;
+        let totalGpuMemory = 0;
+
+        // Skip the first entry if it contains headers
+        for (let i = 1; i < gpuInfo.length; i++) {
+            const node = gpuInfo[i];
+            const nodeGpuCount = parseInt(node.gpuCount) || 0;
+            const nodeGpuMemory = parseInt(node.gpuMemory) || 0;
+            const nodeGpuTotalMemory = nodeGpuCount * nodeGpuMemory;
+            
+            totalGpuMemory += nodeGpuTotalMemory;
+
+            if (totalGpuMemory >= gpuMemoryNeededMB && gpuLimit === 0) {
+                gpuLimit = Math.ceil(gpuMemoryNeededMB / nodeGpuMemory);
+            }
+        }
+
+        if (gpuLimit === 0 && totalGpuMemory > 0) {
+            gpuLimit = Math.ceil(gpuMemoryNeededMB / totalGpuMemory);
+        }
+
+        document.getElementById('gpuLimit').value = Math.max(1, gpuLimit);
+
+        // Log the calculations for debugging
+        console.log('GPU Calculations:', {
+            gpuMemoryNeededMB,
+            totalGpuMemory,
+            gpuLimit,
+            gpuInfo
+        });
+    }
+
     function setupNamespaceDropdowns() {
         const namespaceInputs = ['namespace', 'vllmNamespace'].map(id => document.getElementById(id));
         
@@ -604,6 +673,17 @@
         setupFrameworkSelection();
         setupVLLMForm();
         setupNamespaceDropdowns();
+
+        // Add event listeners for resource calculation
+        const modelSizeInput = document.getElementById('modelSize');
+        if (modelSizeInput) {
+            modelSizeInput.addEventListener('input', calculateResources);
+        }
+
+        const quantizationSelect = document.getElementById('quantization');
+        if (quantizationSelect) {
+            quantizationSelect.addEventListener('change', calculateResources);
+        }
         
         const savedModels = localStorage.getItem('models');
         if (savedModels) {
