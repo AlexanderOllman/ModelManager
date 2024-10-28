@@ -3,7 +3,7 @@
 {% block content %}
 <h2 class="mt-4">Download Models</h2>
 <div class="mb-3 d-flex justify-content-between align-items-center">
-    <input type="text" id="modelSearch" class="form-control w-75" placeholder="Search models">
+    <input type="text" id="modelSearch" class="form-control w-75" placeholder="Search models by name or repository">
     <button id="addModelBtn" class="btn btn-primary">Add Model</button>
 </div>
 <div id="models-container" class="row">
@@ -14,160 +14,48 @@
 
 <!-- Add Model Form -->
 <div id="add-model-form" class="mt-4" style="display: none;">
-    <h3>Download New Model</h3>
-    <form id="newModelForm">
-        <div class="mb-3">
-            <label for="modelRepo" class="form-label">HuggingFace Repository</label>
-            <input type="text" class="form-control" id="modelRepo" required placeholder="e.g., facebook/opt-350m">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">Download New Model</h3>
+            <button type="button" id="cancelAddModel" class="btn-close" aria-label="Close"></button>
         </div>
-        <button type="submit" class="btn btn-primary">Download</button>
-        <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
-    </form>
+        <div class="card-body">
+            <form id="newModelForm">
+                <div class="mb-3">
+                    <label for="modelRepo" class="form-label">HuggingFace Repository</label>
+                    <input type="text" class="form-control" id="modelRepo" required 
+                           placeholder="e.g., roneneldan/TinyStories-1M">
+                    <div class="form-text">Enter the full repository path (owner/repository)</div>
+                </div>
+                <button type="submit" class="btn btn-primary">Download</button>
+            </form>
+        </div>
+    </div>
 </div>
 
 <!-- Download Progress Modal -->
 <div class="modal fade" id="downloadProgressModal" tabindex="-1" aria-labelledby="downloadProgressModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="downloadProgressModalLabel">Download Progress</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-          <div id="downloadStatusBody" class="log-container"></div>
-          <div id="downloadSpinner" class="text-center mt-3">
-            <div class="spinner-border" role="status">
-              <span class="visually-hidden">Loading...</span>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="downloadProgressModalLabel">Download Progress</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-          <button type="button" class="btn btn-primary" id="downloadCopyLogs">Copy Logs</button>
-        </div>
-      </div>
-    </div>
-  </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-    function createModelCards(data) {
-        const container = document.getElementById('models-container');
-        container.innerHTML = '';
-        if (data.length === 0) {
-            container.innerHTML = '<p>No models found.</p>';
-            return;
-        }
-        data.forEach(item => {
-            const card = document.createElement('div');
-            card.className = 'col-md-4 mb-4';
-            card.innerHTML = `
-                <div class="card">
-                    <div class="image-container">
-                        <div class="image"></div>
+            <div class="modal-body">
+                <div id="downloadStatusBody" class="log-container"></div>
+                <div id="downloadSpinner" class="text-center mt-3">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
                     </div>
-                    <div class="tag">
-                        <span>Downloaded</span>
-                    </div>
-                    <div class="publication-date">
-                        <span>Location: /mnt/models/hub</span>
-                    </div>
-                    <h1>${item}</h1>
                 </div>
-            `;
-            container.appendChild(card);
-        });
-    }
-
-    function filterModels() {
-        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        document.querySelectorAll('#models-container .col-md-4').forEach(card => {
-            const name = card.querySelector('h1').textContent.toLowerCase();
-            if (name.includes(searchTerm)) {
-                card.style.display = '';
-            } else {
-                card.style.display = 'none';
-            }
-        });
-    }
-
-    function showAddModelForm() {
-        document.getElementById('models-container').style.display = 'none';
-        document.getElementById('add-model-form').style.display = 'block';
-        document.getElementById('modelSearch').style.display = 'none';
-        document.getElementById('addModelBtn').style.display = 'none';
-    }
-
-    function hideAddModelForm() {
-        document.getElementById('models-container').style.display = 'flex';
-        document.getElementById('add-model-form').style.display = 'none';
-        document.getElementById('modelSearch').style.display = 'block';
-        document.getElementById('addModelBtn').style.display = 'block';
-        document.getElementById('newModelForm').reset();
-    }
-
-
-    function downloadModel(modelRepo) {
-        const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
-        const statusBody = document.getElementById('downloadStatusBody');
-        const spinner = document.getElementById('downloadSpinner');
-        statusBody.innerHTML = '';
-        spinner.style.display = 'block';
-        modal.show();
-
-        const eventSource = new EventSource(`/api/download-model?repo=${encodeURIComponent(modelRepo)}`);
-
-        eventSource.onmessage = function(event) {
-            const message = document.createElement('p');
-            message.textContent = event.data;
-            statusBody.appendChild(message);
-
-            // Check for completion or error
-            if (event.data.includes('downloaded to') || event.data.includes('Error')) {
-                eventSource.close();
-                spinner.style.display = 'none';
-                
-                if (!event.data.includes('Error')) {
-                    // Success - refresh the model list
-                    setTimeout(() => {
-                        fetchModels();
-                    }, 1000); // Wait a second before refreshing
-                }
-            }
-        };
-
-        eventSource.onerror = function(error) {
-            eventSource.close();
-            const errorMessage = document.createElement('p');
-            errorMessage.textContent = 'Connection error occurred';
-            errorMessage.style.color = 'red';
-            statusBody.appendChild(errorMessage);
-            spinner.style.display = 'none';
-        };
-    }
-
-
-    function fetchModels() {
-        fetch('/api/list-models')
-            .then(response => response.json())
-            .then(data => createModelCards(data));
-    }
-
-    // Event Listeners
-    document.getElementById('modelSearch').addEventListener('input', filterModels);
-    document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
-    document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
-    document.getElementById('newModelForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const modelRepo = document.getElementById('modelRepo').value;
-        hideAddModelForm();
-        downloadModel(modelRepo);
-    });
-
-    // Initial load
-    fetchModels();
-</script>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="downloadCopyLogs">Copy Logs</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block styles %}
@@ -189,15 +77,9 @@
         box-shadow: var(--push) var(--push) 0 0 black;
         will-change: box-shadow, transform;
         height: 100%;
-        margin: 0 auto;
     }
 
-    .card:active {
-        box-shadow: 0 0 0 0 black;
-        transform: translate(var(--push), var(--push));
-    }
-
-    .card:not(:active):hover {
+    .card:hover {
         --push: 4px;
         box-shadow: var(--push) var(--push) 0 0 black;
         transform: translate(var(--push), var(--push));
@@ -212,7 +94,7 @@
     }
 
     .image {
-        background-image: url("https://cdn.dribbble.com/users/1186668/screenshots/17303363/media/bc6aa9915a58811524bbbfd89cbb2d71.jpg");
+        background-color: #f0f0f0;
         background-position: center;
         background-size: 100%;
         background-repeat: no-repeat;
@@ -231,10 +113,10 @@
     }
 
     .card h1 {
-        margin: 8px 0;
-        font-size: 20px;
-        word-wrap: break-word;
-        overflow-wrap: break-word;
+        margin: 8px 0 4px 0;
+        font-size: 1.5rem;
+        color: #2c3e50;
+        font-weight: bold;
     }
 
     .publication-date {
@@ -242,121 +124,29 @@
         color: rgba(0, 0, 0, 0.75);
     }
 
-    .card p {
-        margin: 0;
-        font-size: 14px;
-        color: rgba(0, 0, 0, 0.65);
-        line-height: 1.5;
+    .repo-info {
+        padding: 0.5rem 0;
+        color: #6c757d;
+        font-size: 0.9rem;
     }
 
-    #models-container {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: start;
-        gap: 20px;
-        padding: 20px 0;
-    }
-
-    .col-md-4 {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 20px;
-    }
-
-    #add-model-form {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-        background-color: #f8f9fa;
-        border-radius: 12px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    #downloadStatusBody {
-        max-height: 300px;
-        overflow-y: auto;
+    .full-repo-path {
         font-family: monospace;
-        padding: 10px;
         background-color: #f8f9fa;
-        border-radius: 4px;
-        margin-bottom: 10px;
+        padding: 0.2rem 0.4rem;
+        border-radius: 0.25rem;
+        word-break: break-all;
     }
 
-    #downloadStatusBody p {
-        margin: 5px 0;
-        line-height: 1.4;
+    #add-model-form .card {
+        max-width: 100%;
+        cursor: default;
     }
 
-    #downloadSpinner {
-        padding: 20px 0;
+    #add-model-form .card:hover {
+        transform: none;
+        box-shadow: var(--push) var(--push) 0 0 black;
     }
-
-    .success {
-        color: #198754;
-    }
-
-    .error {
-        color: #dc3545;
-    }
-
-    .info {
-        color: #0d6efd;
-    }
-
-    /* Search bar styling */
-    #modelSearch {
-        border-radius: 20px;
-        padding: 10px 20px;
-        border: 1px solid #ced4da;
-        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-    }
-
-    #modelSearch:focus {
-        border-color: #86b7fe;
-        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-        outline: none;
-    }
-
-    /* Add Model button styling */
-    #addModelBtn {
-        border-radius: 20px;
-        padding: 8px 20px;
-        transition: all 0.15s ease-in-out;
-    }
-
-    #addModelBtn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Form input styling */
-    .form-control {
-        border-radius: 8px;
-    }
-
-    .form-label {
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Modal styling */
-    .modal-content {
-        border-radius: 12px;
-        border: none;
-    }
-
-    .modal-header {
-        border-bottom: 1px solid #dee2e6;
-        background-color: #f8f9fa;
-        border-radius: 12px 12px 0 0;
-    }
-
-    .modal-footer {
-        border-top: 1px solid #dee2e6;
-        background-color: #f8f9fa;
-        border-radius: 0 0 12px 12px;
-    }
-
 
     .log-container {
         max-height: 400px;
@@ -391,25 +181,170 @@
         font-weight: bold;
     }
 
-    /* Spinner styling */
-    .spinner-border {
-        width: 2rem;
-        height: 2rem;
-        border-width: 0.25em;
+    #models-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .col-md-4 {
+        flex: 0 0 auto;
+        width: calc(33.33% - 1rem);
+        min-width: 320px;
+    }
+
+    @media (max-width: 992px) {
+        .col-md-4 {
+            width: calc(50% - 1rem);
+        }
     }
 
     @media (max-width: 768px) {
-        .card {
-            min-width: 280px;
-        }
-
-        #add-model-form {
-            padding: 15px;
-        }
-
         .col-md-4 {
             width: 100%;
         }
     }
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function createModelCards(data) {
+        const container = document.getElementById('models-container');
+        container.innerHTML = '';
+        if (data.length === 0) {
+            container.innerHTML = '<p>No models found.</p>';
+            return;
+        }
+        data.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'col-md-4 mb-4';
+            card.innerHTML = `
+                <div class="card">
+                    <div class="image-container">
+                        <div class="image"></div>
+                    </div>
+                    <div class="tag">
+                        <span>Downloaded</span>
+                    </div>
+                    <div class="publication-date">
+                        <span>Location: /mnt/models/hub</span>
+                    </div>
+                    <h1>${item.repo_name}</h1>
+                    <div class="repo-info">
+                        <span class="full-repo-path">${item.full_repo}</span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function filterModels() {
+        const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+        document.querySelectorAll('#models-container .col-md-4').forEach(card => {
+            const repoName = card.querySelector('h1').textContent.toLowerCase();
+            const fullRepo = card.querySelector('.full-repo-path').textContent.toLowerCase();
+            if (repoName.includes(searchTerm) || fullRepo.includes(searchTerm)) {
+                card.style.display = '';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    }
+
+    function showAddModelForm() {
+        document.getElementById('models-container').style.display = 'none';
+        document.getElementById('add-model-form').style.display = 'block';
+        document.getElementById('modelSearch').style.display = 'none';
+        document.getElementById('addModelBtn').style.display = 'none';
+    }
+
+    function hideAddModelForm() {
+        document.getElementById('models-container').style.display = 'flex';
+        document.getElementById('add-model-form').style.display = 'none';
+        document.getElementById('modelSearch').style.display = 'block';
+        document.getElementById('addModelBtn').style.display = 'block';
+        document.getElementById('newModelForm').reset();
+    }
+
+    function downloadModel(modelRepo) {
+        const modal = new bootstrap.Modal(document.getElementById('downloadProgressModal'));
+        const statusBody = document.getElementById('downloadStatusBody');
+        const spinner = document.getElementById('downloadSpinner');
+        statusBody.innerHTML = '';
+        spinner.style.display = 'block';
+        modal.show();
+
+        const eventSource = new EventSource(`/api/download-model?repo=${encodeURIComponent(modelRepo)}`);
+
+        eventSource.onmessage = function(event) {
+            const message = document.createElement('p');
+            const text = event.data;
+            
+            if (text.startsWith('stdout:')) {
+                message.classList.add('stdout');
+            } else if (text.startsWith('stderr:')) {
+                message.classList.add('stderr');
+            } else if (text.includes('Error')) {
+                message.classList.add('error');
+            } else {
+                message.classList.add('info');
+            }
+
+            message.textContent = text;
+            statusBody.appendChild(message);
+            statusBody.scrollTop = statusBody.scrollHeight;
+
+            if (text.includes('Download process complete') || text.includes('Error')) {
+                eventSource.close();
+                spinner.style.display = 'none';
+                
+                if (!text.includes('Error')) {
+                    setTimeout(() => {
+                        fetchModels();
+                    }, 1000);
+                }
+            }
+        };
+
+        eventSource.onerror = function(error) {
+            eventSource.close();
+            const errorMessage = document.createElement('p');
+            errorMessage.textContent = 'Connection error occurred';
+            errorMessage.classList.add('error');
+            statusBody.appendChild(errorMessage);
+            spinner.style.display = 'none';
+        };
+    }
+
+    document.getElementById('downloadCopyLogs').addEventListener('click', function() {
+        const logs = Array.from(document.getElementById('downloadStatusBody').children)
+            .map(p => p.textContent)
+            .join('\n');
+        navigator.clipboard.writeText(logs).then(() => {
+            alert('Logs copied to clipboard!');
+        });
+    });
+
+    function fetchModels() {
+        fetch('/api/list-models')
+            .then(response => response.json())
+            .then(data => createModelCards(data));
+    }
+
+    // Event Listeners
+    document.getElementById('modelSearch').addEventListener('input', filterModels);
+    document.getElementById('addModelBtn').addEventListener('click', showAddModelForm);
+    document.getElementById('cancelAddModel').addEventListener('click', hideAddModelForm);
+    document.getElementById('newModelForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const modelRepo = document.getElementById('modelRepo').value;
+        hideAddModelForm();
+        downloadModel(modelRepo);
+    });
+
+    // Initial load
+    fetchModels();
+</script>
 {% endblock %}

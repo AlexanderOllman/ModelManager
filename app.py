@@ -281,18 +281,36 @@ def list_models():
     models_path = "/mnt/models/hub"
     try:
         if not os.path.exists(models_path):
+            logger.warning(f"Models path {models_path} does not exist")
             return jsonify([])
         
-        model_paths = []
-        for root, dirs, _ in os.walk(models_path):
-            if root != models_path:  # Skip the base directory
-                rel_path = os.path.relpath(root, models_path)
-                if rel_path != ".":  # Skip current directory
-                    model_paths.append(rel_path)
+        model_info = []
+        # Only get immediate subdirectories
+        for item in os.listdir(models_path):
+            full_path = os.path.join(models_path, item)
+            if os.path.isdir(full_path):
+                # Check if directory follows the expected format
+                if item.startswith("models--"):
+                    try:
+                        # Split the directory name into parts
+                        parts = item.split("--")
+                        if len(parts) >= 3:  # models--owner--repo
+                            repo_owner = parts[1]
+                            repo_name = "--".join(parts[2:])  # Join remaining parts in case repo name contains --
+                            model_info.append({
+                                "directory": item,
+                                "repo_owner": repo_owner,
+                                "repo_name": repo_name,
+                                "full_repo": f"{repo_owner}/{repo_name}"
+                            })
+                    except Exception as e:
+                        logger.error(f"Error parsing directory name {item}: {e}")
+                        continue
         
-        return jsonify(model_paths)
+        logger.info(f"Found {len(model_info)} models")
+        return jsonify(model_info)
     except Exception as e:
-        print(f"Error listing models: {e}")
+        logger.error(f"Error listing models: {e}")
         return jsonify([])
 
 def ensure_model_directory():
