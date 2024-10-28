@@ -318,8 +318,10 @@
 
 {% block scripts %}
 <script>
+    // Global variables
     let models = [];
     let availableModels = [];
+    let gpuInfo = [];  // Add this declaration
     const socket = io();
 
     socket.on('deployment_status', function(data) {
@@ -656,11 +658,24 @@
     }
 
     function showAddModelForm() {
-        document.getElementById('models-container').style.display = 'none';
-        document.getElementById('add-model-form').style.display = 'block';
-        document.getElementById('modelSearch').style.display = 'none';
-        document.getElementById('addModelBtn').style.display = 'none';
+    document.getElementById('models-container').style.display = 'none';
+    document.getElementById('add-model-form').style.display = 'block';
+    document.getElementById('modelSearch').style.display = 'none';
+    document.getElementById('addModelBtn').style.display = 'none';
+    
+    // Fetch GPU info when form is shown
+    if (!gpuInfo || gpuInfo.length === 0) {
+        fetch('/api/gpu-info')
+            .then(response => response.json())
+            .then(data => {
+                gpuInfo = data;
+                console.log('Fetched GPU info:', gpuInfo);  // For debugging
+            })
+            .catch(error => {
+                console.error('Error fetching GPU info:', error);
+            });
     }
+}
 
     function hideAddModelForm() {
         document.getElementById('models-container').style.display = 'flex';
