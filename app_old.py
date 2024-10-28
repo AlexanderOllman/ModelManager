@@ -46,6 +46,7 @@ class StringIOWithCallback(io.StringIO):
         super().write(s)
         if s.strip():  # Only send non-empty lines
             self.callback(s.strip())
+            
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
     return result.stdout, result.stderr

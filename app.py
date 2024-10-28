@@ -1,5 +1,4 @@
-from flask import Flask, render_template, jsonify, request, Response
-from flask_socketio import SocketIO
+from flask import Flask, render_template, jsonify, request, Response, stream_with_context
 import subprocess
 import json
 import yaml
@@ -7,17 +6,11 @@ import threading
 import time
 import os
 import logging
-from huggingface_hub import snapshot_download, logging as hf_logging
+from flask_socketio import SocketIO
+from huggingface_hub import snapshot_download, logging as hf_logging, HfApi
+import sys
 import contextlib
 import io
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-hf_logging.set_verbosity_info()
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -25,17 +18,68 @@ socketio = SocketIO(app)
 deployment_lock = threading.Lock()
 deployment_in_progress = False
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Set HuggingFace Hub logging to INFO level
+hf_logging.set_verbosity_info()
+
+class HFLoggingHandler(logging.Handler):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def emit(self, record):
+        log_entry = self.format(record)
+        self.callback(log_entry)
+
+class StringIOWithCallback(io.StringIO):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def write(self, s):
+        super().write(s)
+        if s.strip():  # Only send non-empty lines
+            self.callback(s.strip())
+
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
     return result.stdout, result.stderr
 
+def check_runtime_exists(runtime_name):
+    _, error = run_kubectl_command(f"kubectl get clusterservingruntime {runtime_name}")
+    return "NotFound" not in error
+
 def ensure_model_directory():
     models_path = "/mnt/models/hub"
     try:
-        os.makedirs(models_path, exist_ok=True)
+        logger.info(f"Checking if models directory exists: {models_path}")
+        if os.path.exists(models_path):
+            logger.info("Models directory already exists")
+        else:
+            logger.info("Creating models directory")
+            os.makedirs(models_path, exist_ok=True)
+            logger.info("Models directory created successfully")
+
+        # Verify write permissions
+        test_file = os.path.join(models_path, '.write_test')
+        try:
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            logger.info("Write permission test passed")
+        except Exception as e:
+            logger.error(f"Write permission test failed: {e}")
+            return False
+
         return True
     except Exception as e:
-        logger.error(f"Error creating models directory: {e}")
+        logger.error(f"Error ensuring models directory exists: {e}")
         return False
 
 def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
@@ -326,6 +370,24 @@ def list_models():
         logger.error(f"Error listing models: {e}")
         return jsonify([])
 
+@app.route('/api/isvc')
+def get_isvc():
+    isvc_data, _ = run_kubectl_command("kubectl get isvc -A -o json")
+    return jsonify(json.loads(isvc_data))
+
+@app.route('/api/clusterservingruntime')
+def get_clusterservingruntime():
+    csr_data, _ = run_kubectl_command("kubectl get clusterservingruntime -A -o json")
+    return jsonify(json.loads(csr_data))
+
+@app.route('/api/pods')
+def get_pods():
+    command = "kubectl get pods -A -l serving.kserve.io/inferenceservice -o json"
+    pods_data, error = run_kubectl_command(command)
+    if error:
+        return jsonify({'error': str(error)}), 500
+    return pods_data
+
 @app.route('/api/namespaces')
 def get_namespaces():
     namespaces_data, _ = run_kubectl_command("kubectl get namespaces -o json")
@@ -581,36 +643,83 @@ def delete_resource(resource_type, resource_name):
 def download_model():
     model_repo = request.args.get('repo')
     if not model_repo:
+        logger.error("No model repository specified")
         return Response("data: Error: No model repository specified\n\n", 
                        mimetype='text/event-stream')
 
     if not ensure_model_directory():
+        logger.error("Could not create models directory")
         return Response("data: Error: Could not create models directory\n\n", 
                        mimetype='text/event-stream')
 
     @stream_with_context
     def generate():
+        def send_log(message):
+            yield f"data: {message}\n\n"
+
         try:
             cache_dir = "/mnt/models/hub"
+            logger.info(f"Starting download of {model_repo}")
             yield f"data: Starting download of {model_repo}\n\n"
-            
-            result = snapshot_download(
-                repo_id=model_repo,
-                cache_dir=cache_dir,
-                local_files_only=False,
-                allow_patterns=["*.safetensors", "*.json"]
-            )
-            
-            yield f"data: Model files downloaded to {cache_dir}\n\n"
-            yield f"data: Downloaded files located at: {result}\n\n"
-            
-            # List downloaded files
+
+            # Create a callback for logging
+            def log_callback(message):
+                logger.info(message)
+                yield f"data: {message}\n\n"
+
+            # Set up HuggingFace logging handler
+            hf_handler = HFLoggingHandler(lambda msg: next(send_log(msg)))
+            hf_logger = logging.getLogger("huggingface_hub")
+            hf_logger.addHandler(hf_handler)
+
+            # Get model info
+            api = HfApi()
             try:
-                files = os.listdir(result)
-                yield f"data: Downloaded files: {', '.join(files)}\n\n"
+                logger.info(f"Fetching model info for {model_repo}")
+                yield f"data: Fetching model info for {model_repo}\n\n"
+                model_info = api.model_info(model_repo)
+                yield f"data: Model size: {model_info.siblings_size_human_readable}\n\n"
             except Exception as e:
-                logger.error(f"Error listing downloaded files: {e}")
-                yield f"data: Error listing downloaded files: {str(e)}\n\n"
+                logger.warning(f"Could not fetch model info: {e}")
+                yield f"data: Could not fetch model size information\n\n"
+
+            # Capture stdout and stderr
+            stdout_callback = StringIOWithCallback(lambda msg: next(send_log(f"stdout: {msg}")))
+            stderr_callback = StringIOWithCallback(lambda msg: next(send_log(f"stderr: {msg}")))
+
+            logger.info("Setting up download parameters")
+            yield f"data: Setting up download parameters\n\n"
+
+            with contextlib.redirect_stdout(stdout_callback), contextlib.redirect_stderr(stderr_callback):
+                logger.info("Starting snapshot_download")
+                yield f"data: Starting snapshot_download\n\n"
+                
+                result = snapshot_download(
+                    repo_id=model_repo,
+                    cache_dir=cache_dir,
+                    local_files_only=False,
+                    allow_patterns=["*.safetensors", "*.json"],
+                    token=None  # Add your token here if needed for private repos
+                )
+                
+                logger.info(f"Download completed. Files stored at: {result}")
+                yield f"data: Model files downloaded to {cache_dir}\n\n"
+                yield f"data: Downloaded files located at: {result}\n\n"
+                
+                # List downloaded files
+                try:
+                    files = os.listdir(result)
+                    logger.info(f"Downloaded files: {files}")
+                    yield f"data: Downloaded files: {', '.join(files)}\n\n"
+                    
+                    # Calculate total size of downloaded files
+                    total_size = sum(os.path.getsize(os.path.join(result, f)) for f in files)
+                    size_mb = total_size / (1024 * 1024)
+                    logger.info(f"Total downloaded size: {size_mb:.2f} MB")
+                    yield f"data: Total downloaded size: {size_mb:.2f} MB\n\n"
+                except Exception as e:
+                    logger.error(f"Error listing downloaded files: {e}")
+                    yield f"data: Error listing downloaded files: {str(e)}\n\n"
 
             yield "data: Download process complete!\n\n"
             logger.info("Download process complete")
@@ -624,8 +733,12 @@ def download_model():
             tb = traceback.format_exc()
             logger.error(f"Full traceback:\n{tb}")
             yield f"data: Full error details: {tb}\n\n"
+        finally:
+            # Clean up the HuggingFace logging handler
+            hf_logger.removeHandler(hf_handler)
 
     return Response(generate(), mimetype='text/event-stream')
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')
