@@ -339,13 +339,13 @@
 
 {% block scripts %}
 <script>
-    // Global variables
-    let models = [];
-    let availableModels = [];
-    let gpuInfo = [];  // Add this declaration
-    const socket = io();
+// Global variables
+let models = [];
+let availableModels = [];
+let gpuInfo = [];
+const socket = io();
 
-    socket.on('deployment_status', function(data) {
+socket.on('deployment_status', function(data) {
     const statusBody = document.getElementById('deploymentStatusBody');
     const statusMessage = document.createElement('p');
     statusMessage.textContent = data.message;
@@ -400,7 +400,6 @@ function createModelCards(data) {
         container.appendChild(card);
     });
 
-    // Add event listeners
     document.querySelectorAll('.deploy-btn').forEach(btn => {
         btn.addEventListener('click', (e) => deployModel(e.target.dataset.modelName));
     });
@@ -414,12 +413,35 @@ function setupFrameworkSelection() {
     const forms = document.querySelectorAll('.framework-form');
     const resourcesSection = document.getElementById('resources-section');
 
+    // Function to toggle required attributes
+    function toggleRequiredAttributes(formId, enable) {
+        const form = document.getElementById(formId);
+        if (form) {
+            form.querySelectorAll('input[required], select[required]').forEach(input => {
+                if (enable) {
+                    input.setAttribute('required', '');
+                } else {
+                    input.removeAttribute('required');
+                }
+            });
+        }
+    }
+
+    // Initially disable all required attributes
+    forms.forEach(form => {
+        toggleRequiredAttributes(form.id, false);
+    });
+
     frameworkCards.forEach(card => {
         card.addEventListener('click', function() {
             // Remove selection from all cards
             frameworkCards.forEach(c => c.classList.remove('selected'));
-            // Hide all forms
-            forms.forEach(f => f.style.display = 'none');
+            
+            // Disable required attributes and hide all forms
+            forms.forEach(f => {
+                f.style.display = 'none';
+                toggleRequiredAttributes(f.id, false);
+            });
             
             // Select this card and show corresponding form
             this.classList.add('selected');
@@ -427,7 +449,12 @@ function setupFrameworkSelection() {
             const selectedForm = document.getElementById(`${framework}-form`);
             if (selectedForm) {
                 selectedForm.style.display = 'block';
+                toggleRequiredAttributes(`${framework}-form`, true);
                 resourcesSection.style.display = 'block';
+
+                // Re-enable resource section required attributes
+                const resourceInputs = resourcesSection.querySelectorAll('input[data-required="true"]');
+                resourceInputs.forEach(input => input.setAttribute('required', ''));
             }
             
             // Select the radio input
@@ -466,6 +493,9 @@ function setupVLLMForm() {
             otherModelModal.show();
         } else if (this.value) {
             customModelDiv.style.display = 'none';
+            // Remove required attribute from custom model fields
+            document.getElementById('vllmModelName')?.removeAttribute('required');
+            document.getElementById('vllmStorageUri')?.removeAttribute('required');
             deployNameInput.value = this.value.toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
@@ -474,12 +504,18 @@ function setupVLLMForm() {
 
     document.getElementById('continueCustomModel').addEventListener('click', function() {
         customModelDiv.style.display = 'block';
+        // Add required attribute to custom model fields
+        document.getElementById('vllmModelName')?.setAttribute('required', '');
+        document.getElementById('vllmStorageUri')?.setAttribute('required', '');
         otherModelModal.hide();
     });
 
     document.getElementById('cancelCustomModel').addEventListener('click', function() {
         modelSelect.value = '';
         customModelDiv.style.display = 'none';
+        // Remove required attribute from custom model fields
+        document.getElementById('vllmModelName')?.removeAttribute('required');
+        document.getElementById('vllmStorageUri')?.removeAttribute('required');
         otherModelModal.hide();
     });
 }
@@ -565,6 +601,13 @@ function calculateGPULimit(gpuMemoryNeededMB) {
     if (gpuInput) {
         gpuInput.value = Math.max(1, gpuLimit);
     }
+
+    console.log('GPU Calculation:', {
+        gpuMemoryNeededMB,
+        totalGpuMemory,
+        gpuLimit,
+        gpuInfo
+    });
 }
 
 function calculateResources() {
@@ -616,7 +659,7 @@ function calculateResources() {
 
 function saveNewModel(e) {
     e.preventDefault();
-    const framework = document.querySelector('input[name="framework"]:checked')?.value;
+    const framework = document.querySelector('.framework-card.selected')?.dataset.framework;
     if (!framework) {
         alert('Please select a framework');
         return;
@@ -628,6 +671,16 @@ function saveNewModel(e) {
         const modelSelect = document.getElementById('vllmModel');
         const modelValue = modelSelect.value;
         const customModel = modelValue === 'other';
+
+        if (!modelValue) {
+            alert('Please select a model');
+            return;
+        }
+
+        if (customModel && !document.getElementById('vllmModelName').value) {
+            alert('Please enter a model name');
+            return;
+        }
 
         newModel = {
             framework: 'vllm',
@@ -732,7 +785,13 @@ function hideAddModelForm() {
     document.getElementById('addModelBtn').style.display = 'block';
     document.getElementById('newModelForm').reset();
     document.querySelectorAll('.framework-card').forEach(card => card.classList.remove('selected'));
-    document.querySelectorAll('.framework-form').forEach(form => form.style.display = 'none');
+    document.querySelectorAll('.framework-form').forEach(form => {
+        form.style.display = 'none';
+        // Remove required attributes when hiding
+        form.querySelectorAll('input[required], select[required]').forEach(input => {
+            input.removeAttribute('required');
+        });
+    });
     document.getElementById('resources-section').style.display = 'none';
     document.querySelectorAll('.collapse').forEach(collapse => {
         if (collapse.classList.contains('show')) {
@@ -754,29 +813,13 @@ function filterModels() {
     });
 }
 
-function setupResourceCalculation() {
-    const modelSizeInput = document.getElementById('modelSize');
-    if (modelSizeInput) {
-        modelSizeInput.addEventListener('input', calculateResources);
-    }
-
-    // Add event listeners for both framework's quantization selects
-    ['nvidia-nim', 'vllm'].forEach(framework => {
-        const quantizationSelect = document.getElementById(`${framework}Quantization`);
-        if (quantizationSelect) {
-            quantizationSelect.addEventListener('change', calculateResources);
-        }
-    });
-}
-
-// Event Listeners and Initialization
+// Initialize everything
 document.addEventListener('DOMContentLoaded', function() {
     setupFrameworkSelection();
     setupVLLMForm();
     setupNamespaceDropdowns();
-    setupResourceCalculation();
     
-    // Add event listeners for search and form
+    // Add event listeners
     const modelSearchInput = document.getElementById('modelSearch');
     if (modelSearchInput) {
         modelSearchInput.addEventListener('input', filterModels);
@@ -797,6 +840,11 @@ document.addEventListener('DOMContentLoaded', function() {
         modelForm.addEventListener('submit', saveNewModel);
     }
 
+    const modelSizeInput = document.getElementById('modelSize');
+    if (modelSizeInput) {
+        modelSizeInput.addEventListener('input', calculateResources);
+    }
+
     // Load saved models
     const savedModels = localStorage.getItem('models');
     if (savedModels) {
@@ -815,5 +863,6 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error fetching GPU info:', error);
         });
 });
+
 </script>
 {% endblock %}
