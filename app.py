@@ -83,6 +83,7 @@ def ensure_model_directory():
         return False
 
 def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
+    global deployment_in_progress
     max_attempts = 30
     attempt = 0
     while attempt < max_attempts:
@@ -94,6 +95,7 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
                 'status': 'error', 
                 'message': f"Error checking pod status: {pod_error}"
             })
+            deployment_in_progress = False
             return False
 
         pod_data = json.loads(pod_output)
@@ -113,6 +115,7 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
                         'status': 'error',
                         'message': f"Error checking InferenceService status: {isvc_error}"
                     })
+                    deployment_in_progress = False
                     return False
 
                 isvc_data = json.loads(isvc_output)
@@ -132,16 +135,18 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
                             'message': f"Model deployed successfully! URL: {url}",
                             'final': True
                         })
+                        deployment_in_progress = False
                         return True
 
         attempt += 1
-        time.sleep(10)
+        time.sleep(10)  # Now waits 10 seconds between checks
 
     socketio.emit('deployment_status', {
         'status': 'error',
         'message': "Deployment timed out",
         'final': True
     })
+    deployment_in_progress = False
     return False
 
 def generate_vllm_manifest(data):
@@ -393,6 +398,25 @@ def get_namespaces():
     namespaces_data, _ = run_kubectl_command("kubectl get namespaces -o json")
     namespaces_json = json.loads(namespaces_data)
     return jsonify([item['metadata']['name'] for item in namespaces_json['items']])
+
+@app.route('/api/gpu-info')
+def get_gpu_info():
+    gpu_info_command = """
+    kubectl get nodes -o custom-columns='NODE:.metadata.name,GPU_COUNT:.status.allocatable.nvidia\.com/gpu,GPU_MODEL:.metadata.labels.nvidia\.com/gpu\.product,GPU_MEMORY:.metadata.labels.nvidia\.com/gpu\.memory' | grep -v '<none>' | grep -v ' 0 ' | sed -E 's/^([^ ]+) +([^ ]+) +([^ ]+) +([^ ]+)$/{"nodeName": "\\1", "gpuCount": "\\2", "gpuModel": "\\3", "gpuMemory": "\\4"}/'
+    """
+    gpu_info_data, error = run_kubectl_command(gpu_info_command)
+    if error:
+        logging.error(f"Error fetching GPU info: {error}")
+        return jsonify([])
+    
+    try:
+        gpu_info_list = [json.loads(line) for line in gpu_info_data.strip().split('\n') if line.strip()]
+        logging.error(f"GPU Info: {gpu_info_list}")  # Log the result for debugging
+        return jsonify(gpu_info_list)
+    except json.JSONDecodeError as e:
+        logging.error(f"Error parsing GPU info: {e}")
+        logging.error(f"Raw GPU info data: {gpu_info_data}")
+        return jsonify([])
 
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
