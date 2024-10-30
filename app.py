@@ -137,6 +137,8 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
                         })
                         deployment_in_progress = False
                         return True
+            else:
+                logging.error(f"Pod not yet running.")
 
         attempt += 1
         time.sleep(10)  # Now waits 10 seconds between checks
