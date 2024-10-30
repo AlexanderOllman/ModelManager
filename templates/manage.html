@@ -242,15 +242,18 @@
 
     function setupActionListeners(container) {
         // Copy URL buttons
-        container.querySelectorAll('.copy-url-button').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const url = e.currentTarget.dataset.url;
-                navigator.clipboard.writeText(url).then(() => {
-                    showCopySuccess('Endpoint URL');
-                });
+// Update the click handler for copy buttons
+    container.querySelectorAll('.copy-url-button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const url = e.currentTarget.dataset.url;
+            navigator.clipboard.writeText(url).then(() => {
+                showCopySuccess('Endpoint URL');
+            }).catch(err => {
+                console.error('Failed to copy text:', err);
             });
         });
+    });
 
         // Describe action
         container.querySelectorAll('.describe-action').forEach(btn => {
