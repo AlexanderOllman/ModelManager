@@ -6,7 +6,7 @@
     <input type="text" id="modelSearch" class="form-control w-75" placeholder="Search models">
     <button id="addModelBtn" class="btn btn-primary">Add Model</button>
 </div>
-<div id="models-container" class="row">
+<div id="models-container">
     <div class="spinner-border" role="status">
         <span class="visually-hidden">Loading...</span>
     </div>
@@ -14,7 +14,7 @@
 
 <div id="add-model-form" class="mt-4" style="display: none;">
     <h3>Add New Model</h3>
-    <div class="framework-selection mb-4">
+    <div class="framework-selection">
         <div class="row justify-content-start">
             <div class="col-md-3 mb-3">
                 <div class="framework-card" data-framework="nvidia-nim">
@@ -44,136 +44,143 @@
     </div>
 
     <form id="newModelForm">
-        <!-- NVIDIA NIM Form -->
-        <div id="nvidia-nim-form" class="framework-form" style="display: none;">
-            <div class="mb-3">
-                <label for="modelName" class="form-label">Model Name</label>
-                <input type="text" class="form-control" id="modelName" name="modelName" required>
-            </div>
-            <div class="mb-3">
-                <label for="containerImage" class="form-label">Container Path</label>
-                <input type="text" class="form-control" id="containerImage" name="containerImage" required>
-            </div>
-            <div class="mb-3">
-                <label for="storageUri" class="form-label">Storage URI</label>
-                <input type="text" class="form-control" id="storageUri" name="storageUri" value="pvc://models-pvc" required>
-            </div>
-            <div class="mb-3">
-                <label for="namespace" class="form-label">Namespace</label>
-                <input type="text" class="form-control" id="namespace" name="namespace" autocomplete="off" required>
-                <ul id="namespaceDropdown" class="dropdown-menu" style="display: none;"></ul>
-            </div>
-            
-            <div class="mb-3">
-                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#nimAdvancedOptions" aria-expanded="false">
-                    Advanced Options
-                </button>
-                <div class="collapse" id="nimAdvancedOptions">
-                    <div class="card card-body">
-                        <div class="mb-3">
-                            <label for="nimQuantization" class="form-label">Quantization</label>
-                            <select class="form-select" id="nimQuantization" name="quantization">
-                                <option value="16" selected>FP16</option>
-                                <option value="8">FP8</option>
-                                <option value="4">FP4</option>
-                                <option value="2">FP2</option>
-                            </select>
+        <div class="deploy-form-container">
+            <!-- Left Side - Details -->
+            <div class="deploy-form-details">
+                <!-- NVIDIA NIM Form -->
+                <div id="nvidia-nim-form" class="framework-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="modelName" class="form-label">Model Name</label>
+                        <input type="text" class="form-control" id="modelName" name="modelName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="containerImage" class="form-label">Container Path</label>
+                        <input type="text" class="form-control" id="containerImage" name="containerImage" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="storageUri" class="form-label">Storage URI</label>
+                        <input type="text" class="form-control" id="storageUri" name="storageUri" value="pvc://models-pvc" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="namespace" class="form-label">Namespace</label>
+                        <input type="text" class="form-control" id="namespace" name="namespace" autocomplete="off" required>
+                        <ul id="namespaceDropdown" class="dropdown-menu" style="display: none;"></ul>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#nimAdvancedOptions" aria-expanded="false">
+                            Advanced Options
+                        </button>
+                        <div class="collapse" id="nimAdvancedOptions">
+                            <div class="card card-body">
+                                <div class="form-group">
+                                    <label for="nimQuantization" class="form-label">Quantization</label>
+                                    <select class="form-select" id="nimQuantization" name="quantization">
+                                        <option value="16" selected>FP16</option>
+                                        <option value="8">FP8</option>
+                                        <option value="4">FP4</option>
+                                        <option value="2">FP2</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- vLLM Form -->
+                <div id="vllm-form" class="framework-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="vllmModel" class="form-label">Model</label>
+                        <select class="form-select" id="vllmModel" name="vllmModel" required>
+                            <option value="">Select a model</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div id="vllmCustomModel" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="vllmModelName" class="form-label">Model Name</label>
+                                    <input type="text" class="form-control" id="vllmModelName" name="vllmModelName" 
+                                           placeholder="e.g. meta/llama3-8b-instruct">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="vllmStorageUri" class="form-label">Storage URI</label>
+                                    <input type="text" class="form-control" id="vllmStorageUri" name="vllmStorageUri" 
+                                           value="pvc://models-pvc">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="vllmDeployName" class="form-label">Model Name</label>
+                        <input type="text" class="form-control" id="vllmDeployName" name="vllmDeployName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="vllmContainerImage" class="form-label">Container Image</label>
+                        <input type="text" class="form-control" id="vllmContainerImage" name="vllmContainerImage" 
+                               value="vllm/vllm-openai:latest" required readonly>
+                    </div>
+                    <div class="form-group">
+                        <label for="vllmNamespace" class="form-label">Namespace</label>
+                        <input type="text" class="form-control" id="vllmNamespace" name="vllmNamespace" autocomplete="off" required>
+                        <ul id="vllmNamespaceDropdown" class="dropdown-menu" style="display: none;"></ul>
+                    </div>
+
+                    <div class="form-group">
+                        <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#vllmAdvancedOptions" aria-expanded="false">
+                            Advanced Options
+                        </button>
+                        <div class="collapse" id="vllmAdvancedOptions">
+                            <div class="card card-body">
+                                <div class="form-group">
+                                    <label for="vllmQuantization" class="form-label">Quantization</label>
+                                    <select class="form-select" id="vllmQuantization" name="quantization">
+                                        <option value="16" selected>FP16</option>
+                                        <option value="8">FP8</option>
+                                        <option value="4">FP4</option>
+                                        <option value="2">FP2</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- vLLM Form -->
-        <div id="vllm-form" class="framework-form" style="display: none;">
-            <div class="mb-3">
-                <label for="vllmModel" class="form-label">Model</label>
-                <select class="form-select" id="vllmModel" name="vllmModel" required>
-                    <option value="">Select a model</option>
-                    <option value="other">Other</option>
-                </select>
-            </div>
-            <div id="vllmCustomModel" style="display: none;">
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="vllmModelName" class="form-label">Model Name</label>
-                            <input type="text" class="form-control" id="vllmModelName" name="vllmModelName" 
-                                   placeholder="e.g. meta/llama3-8b-instruct">
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="mb-3">
-                            <label for="vllmStorageUri" class="form-label">Storage URI</label>
-                            <input type="text" class="form-control" id="vllmStorageUri" name="vllmStorageUri" 
-                                   value="pvc://models-pvc">
-                        </div>
-                    </div>
+            <!-- Right Side - Resources -->
+            <div class="deploy-form-resources">
+                <h4>Resources</h4>
+                <div class="form-group">
+                    <label for="modelSize" class="form-label">Model Size (in billions of parameters)</label>
+                    <small class="form-text text-muted d-block mb-2">Fields below will be auto-populated based on model size</small>
+                    <input type="number" class="form-control" id="modelSize" name="modelSize" required>
                 </div>
-            </div>
-            <div class="mb-3">
-                <label for="vllmDeployName" class="form-label">Model Name</label>
-                <input type="text" class="form-control" id="vllmDeployName" name="vllmDeployName" required>
-            </div>
-            <div class="mb-3">
-                <label for="vllmContainerImage" class="form-label">Container Image</label>
-                <input type="text" class="form-control" id="vllmContainerImage" name="vllmContainerImage" 
-                       value="vllm/vllm-openai:latest" required readonly>
-            </div>
-            <div class="mb-3">
-                <label for="vllmNamespace" class="form-label">Namespace</label>
-                <input type="text" class="form-control" id="vllmNamespace" name="vllmNamespace" autocomplete="off" required>
-                <ul id="vllmNamespaceDropdown" class="dropdown-menu" style="display: none;"></ul>
-            </div>
-
-            <div class="mb-3">
-                <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#vllmAdvancedOptions" aria-expanded="false">
-                    Advanced Options
-                </button>
-                <div class="collapse" id="vllmAdvancedOptions">
-                    <div class="card card-body">
-                        <div class="mb-3">
-                            <label for="vllmQuantization" class="form-label">Quantization</label>
-                            <select class="form-select" id="vllmQuantization" name="quantization">
-                                <option value="16" selected>FP16</option>
-                                <option value="8">FP8</option>
-                                <option value="4">FP4</option>
-                                <option value="2">FP2</option>
-                            </select>
-                        </div>
-                    </div>
+                <div class="form-group">
+                    <label for="cpuLimit" class="form-label">CPU Limit</label>
+                    <input type="number" class="form-control" id="cpuLimit" name="cpuLimit" required>
+                </div>
+                <div class="form-group">
+                    <label for="memoryLimit" class="form-label">Memory Limit (Gi)</label>
+                    <input type="number" class="form-control" id="memoryLimit" name="memoryLimit" required>
+                </div>
+                <div class="form-group">
+                    <label for="gpuLimit" class="form-label">GPU</label>
+                    <input type="number" class="form-control" id="gpuLimit" name="gpuLimit" required>
                 </div>
             </div>
         </div>
 
-        <!-- Resources Section (common to all forms) -->
-        <div id="resources-section" style="display: none;">
-            <h4>Resources</h4>
-            <div class="mb-3">
-                <label for="modelSize" class="form-label">Model Size (in billions of parameters)</label>
-                <small class="form-text text-muted d-block">Below fields will be auto-populated with recommended resources based on size of model</small>
-                <input type="number" class="form-control" id="modelSize" name="modelSize" required>
-            </div>
-            <div class="mb-3">
-                <label for="cpuLimit" class="form-label">CPU Limit</label>
-                <input type="number" class="form-control" id="cpuLimit" name="cpuLimit" required>
-            </div>
-            <div class="mb-3">
-                <label for="memoryLimit" class="form-label">Memory Limit (Gi)</label>
-                <input type="number" class="form-control" id="memoryLimit" name="memoryLimit" required>
-            </div>
-            <div class="mb-3">
-                <label for="gpuLimit" class="form-label">GPU</label>
-                <input type="number" class="form-control" id="gpuLimit" name="gpuLimit" required>
-            </div>
+        <!-- Bottom Actions -->
+        <div class="deploy-form-actions">
+            <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Model</button>
         </div>
-
-        <button type="submit" class="btn btn-primary">Save Model</button>
-        <button type="button" id="cancelAddModel" class="btn btn-secondary">Cancel</button>
     </form>
 </div>
 
-<!-- Modals -->
 <!-- Other Model Warning Modal -->
 <div class="modal fade" id="otherModelModal" tabindex="-1">
     <div class="modal-dialog">
@@ -215,6 +222,7 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
