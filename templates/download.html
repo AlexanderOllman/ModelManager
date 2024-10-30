@@ -70,7 +70,6 @@
         }
         data.forEach(item => {
             const card = document.createElement('div');
-            card.className = 'col-md-4 mb-4';
             card.innerHTML = `
                 <div class="card">
                     <div class="image-container">
@@ -94,7 +93,7 @@
 
     function filterModels() {
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        document.querySelectorAll('#models-container .col-md-4').forEach(card => {
+        document.querySelectorAll('#models-container .card').forEach(card => {
             const repoName = card.querySelector('h1').textContent.toLowerCase();
             const fullRepo = card.querySelector('.full-repo-path').textContent.toLowerCase();
             if (repoName.includes(searchTerm) || fullRepo.includes(searchTerm)) {

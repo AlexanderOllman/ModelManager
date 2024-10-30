@@ -272,7 +272,6 @@ function createModelCards(data) {
     }
     data.forEach(model => {
         const card = document.createElement('div');
-        card.className = 'col-md-4 mb-4';
         card.innerHTML = `
             <div class="card">
                 <div class="image-container">
@@ -706,7 +705,7 @@ function hideAddModelForm() {
 
 function filterModels() {
     const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-    document.querySelectorAll('#models-container .col-md-4').forEach(card => {
+    document.querySelectorAll('#models-container .card').forEach(card => {
         const name = card.querySelector('h1').textContent.toLowerCase();
         const content = card.querySelector('p').textContent.toLowerCase();
         if (name.includes(searchTerm) || content.includes(searchTerm)) {

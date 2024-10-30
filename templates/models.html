@@ -50,7 +50,6 @@
         }
         data.items.forEach(item => {
             const card = document.createElement('div');
-            card.className = 'col-md-4 mb-4';
             const readyCondition = safeGet(item, 'status.conditions', []).find(c => c.type === 'Ready');
             const isReady = readyCondition && readyCondition.status === 'True';
             card.innerHTML = `
@@ -84,7 +83,7 @@
 
     function filterModels() {
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
-        const cards = document.querySelectorAll('#models-container .col-md-4');
+        const cards = document.querySelectorAll('#models-container .card');
         cards.forEach(card => {
             const name = safeGet(card.querySelector('h1'), 'textContent', '').toLowerCase();
             const namespace = safeGet(card.querySelector('p'), 'textContent', '').toLowerCase();
