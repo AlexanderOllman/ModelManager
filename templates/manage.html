@@ -100,21 +100,25 @@
     function createInferenceServiceTable(data, containerId) {
         const container = document.getElementById(containerId);
         container.innerHTML = '';
+        
         if (!data.items || data.items.length === 0) {
             container.innerHTML = '<p>No items found.</p>';
             return;
         }
+        
         const table = document.createElement('table');
         table.className = 'table table-striped table-hover';
+        
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
-        ['Name', 'Namespace', 'Model', 'Resources', 'URL', 'Ready', 'Actions'].forEach(header => {
+        ['Name', 'Namespace', 'Model', 'Resources', 'Endpoint URL', 'Ready', 'Actions'].forEach(header => {
             const th = document.createElement('th');
             th.textContent = header;
             headerRow.appendChild(th);
         });
         thead.appendChild(headerRow);
         table.appendChild(thead);
+        
         const tbody = document.createElement('tbody');
         data.items.forEach(item => {
             const row = document.createElement('tr');
@@ -130,15 +134,13 @@
             
             // Resources
             const resourcesCell = document.createElement('td');
-            const resources = safeGet(item, 'spec.predictor.model.resources', {});
-            resourcesCell.innerHTML = `
-                <strong>Limits:</strong> ${JSON.stringify(safeGet(resources, 'limits', {}))}<br>
-                <strong>Requests:</strong> ${JSON.stringify(safeGet(resources, 'requests', {}))}
-            `;
+            resourcesCell.innerHTML = createResourcesGrid(safeGet(item, 'spec.predictor.model.resources', {}));
             row.appendChild(resourcesCell);
             
             // URL
-            row.appendChild(createCell(safeGet(item, 'status.url')));
+            const urlCell = document.createElement('td');
+            urlCell.innerHTML = createUrlCell(safeGet(item, 'status.url'));
+            row.appendChild(urlCell);
             
             // Ready Status
             const readyCell = document.createElement('td');
@@ -153,155 +155,79 @@
             
             // Actions
             const actionsCell = document.createElement('td');
-            actionsCell.innerHTML = `
-                <div class="dropdown">
-                    <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${safeGet(item, 'metadata.name')}" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-ellipsis-v"></i>
-                    </button>
-                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${safeGet(item, 'metadata.name')}">
-                        <li><a class="dropdown-item describe-action" href="#" data-resource-type="isvc" data-resource-name="${safeGet(item, 'metadata.name')}" data-resource-namespace="${safeGet(item, 'metadata.namespace')}">Describe</a></li>
-                        <li><a class="dropdown-item delete-action" href="#" data-resource-type="isvc" data-resource-name="${safeGet(item, 'metadata.name')}" data-resource-namespace="${safeGet(item, 'metadata.namespace')}">Delete</a></li>
-                    </ul>
-                </div>
-            `;
+            actionsCell.innerHTML = createActionsDropdown(item);
             row.appendChild(actionsCell);
             
             tbody.appendChild(row);
         });
+        
         table.appendChild(tbody);
         container.appendChild(table);
 
-        // Add event listeners for describe and delete actions
-        container.querySelectorAll('.describe-action').forEach(btn => {
-            btn.addEventListener('click', (e) => describeResource(e.target.dataset.resourceType, e.target.dataset.resourceName, e.target.dataset.resourceNamespace));
-        });
-        container.querySelectorAll('.delete-action').forEach(btn => {
-            btn.addEventListener('click', (e) => showDeleteConfirmation(e.target.dataset.resourceType, e.target.dataset.resourceName, e.target.dataset.resourceNamespace));
-        });
+        // Add event listeners for actions
+        setupActionListeners(container);
     }
 
-    function createClusterServingRuntimeTable(data, containerId) {
-        const container = document.getElementById(containerId);
-        container.innerHTML = '';
-        if (!data.items || data.items.length === 0) {
-            container.innerHTML = '<p>No items found.</p>';
-            return;
-        }
-        const table = document.createElement('table');
-        table.className = 'table table-striped table-hover';
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-        ['Name', 'Protocols', 'Container Image', 'Supported Model Formats', 'Created At', 'Actions'].forEach(header => {
-            const th = document.createElement('th');
-            th.textContent = header;
-            headerRow.appendChild(th);
-        });
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-        const tbody = document.createElement('tbody');
-        data.items.forEach(item => {
-            const row = document.createElement('tr');
-            
-            // Name
-            row.appendChild(createCell(safeGet(item, 'metadata.name')));
-            
-            // Protocols
-            const protocols = safeGet(item, 'spec.supportedModelFormats.0.autoSelect.protocols', []);
-            row.appendChild(createCell(protocols.join(', ')));
-            
-            // Container Image
-            row.appendChild(createCell(safeGet(item, 'spec.containers.0.image')));
-            
-            // Supported Model Formats
-            const formats = safeGet(item, 'spec.supportedModelFormats', []).map(f => f.name || 'N/A');
-            row.appendChild(createCell(formats.join(', ')));
-            
-            // Created At
-            row.appendChild(createCell(new Date(safeGet(item, 'metadata.creationTimestamp')).toLocaleString()));
-            
-            // Actions
-            const actionsCell = document.createElement('td');
-            actionsCell.innerHTML = `
-                <div class="dropdown">
-                    <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${safeGet(item, 'metadata.name')}" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-ellipsis-v"></i>
-                    </button>
-                    <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${safeGet(item, 'metadata.name')}">
-                        <li><a class="dropdown-item describe-action" href="#" data-resource-type="csr" data-resource-name="${safeGet(item, 'metadata.name')}">Describe</a></li>
-                        <li><a class="dropdown-item delete-action" href="#" data-resource-type="csr" data-resource-name="${safeGet(item, 'metadata.name')}">Delete</a></li>
-                    </ul>
+    function createResourcesGrid(resources) {
+        const limits = resources.limits || {};
+        return `
+            <div class="resources-grid">
+                <div class="resource-column">
+                    <div class="header">CPU</div>
+                    <div class="value">${limits.cpu || 'N/A'}</div>
                 </div>
-            `;
-            row.appendChild(actionsCell);
-            
-            tbody.appendChild(row);
-        });
-        table.appendChild(tbody);
-        container.appendChild(table);
-
-        // Add event listeners for describe and delete actions
-        container.querySelectorAll('.describe-action').forEach(btn => {
-            btn.addEventListener('click', (e) => describeResource(e.target.dataset.resourceType, e.target.dataset.resourceName));
-        });
-        container.querySelectorAll('.delete-action').forEach(btn => {
-            btn.addEventListener('click', (e) => showDeleteConfirmation(e.target.dataset.resourceType, e.target.dataset.resourceName));
-        });
+                <div class="divider"></div>
+                <div class="resource-column">
+                    <div class="header">Memory</div>
+                    <div class="value">${limits.memory || 'N/A'}</div>
+                </div>
+                <div class="divider"></div>
+                <div class="resource-column">
+                    <div class="header">GPU</div>
+                    <div class="value">${limits['nvidia.com/gpu'] || 'N/A'}</div>
+                </div>
+            </div>
+        `;
     }
 
-    function createPodsTable(data, containerId) {
-        const container = document.getElementById(containerId);
-        container.innerHTML = '';
-        if (!data.items || data.items.length === 0) {
-            container.innerHTML = '<p>No pods found.</p>';
-            return;
-        }
-        const table = document.createElement('table');
-        table.className = 'table table-striped table-hover';
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-        ['Name', 'Namespace', 'Status', 'Age', 'Actions'].forEach(header => {
-            const th = document.createElement('th');
-            th.textContent = header;
-            headerRow.appendChild(th);
-        });
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-        const tbody = document.createElement('tbody');
-        data.items.forEach(item => {
-            const row = document.createElement('tr');
-            
-            // Name
-            row.appendChild(createCell(safeGet(item, 'metadata.name')));
-            
-            // Namespace
-            row.appendChild(createCell(safeGet(item, 'metadata.namespace')));
-            
-            // Status
-            row.appendChild(createCell(safeGet(item, 'status.phase')));
-            
-            // Age
-            const creationTime = new Date(safeGet(item, 'metadata.creationTimestamp'));
-            const age = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24)); // Age in days
-            row.appendChild(createCell(`${age} day${age !== 1 ? 's' : ''}`));
-            
-            // Actions
-            const actionsCell = document.createElement('td');
-            actionsCell.innerHTML = `
-                <button class="btn btn-sm btn-primary view-logs" data-pod-name="${safeGet(item, 'metadata.name')}" data-namespace="${safeGet(item, 'metadata.namespace')}">
-                    Logs
+    function createUrlCell(url) {
+        return `
+            <div class="d-flex align-items-center">
+                <span class="text-truncate" style="max-width: 250px;">${url || 'N/A'}</span>
+                ${url ? `
+                    <button class="copy-url-button" data-url="${url}" title="Copy URL">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    function createActionsDropdown(item) {
+        const name = safeGet(item, 'metadata.name');
+        const namespace = safeGet(item, 'metadata.namespace');
+        return `
+            <div class="dropdown">
+                <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" 
+                        id="dropdownMenuButton-${name}" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v"></i>
                 </button>
-            `;
-            row.appendChild(actionsCell);
-            
-            tbody.appendChild(row);
-        });
-        table.appendChild(tbody);
-        container.appendChild(table);
-
-        // Add event listeners for viewing logs
-        container.querySelectorAll('.view-logs').forEach(btn => {
-            btn.addEventListener('click', (e) => viewPodLogs(e.target.dataset.podName, e.target.dataset.namespace));
-        });
+                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${name}">
+                    <li>
+                        <a class="dropdown-item describe-action" href="#" 
+                           data-resource-type="isvc" 
+                           data-resource-name="${name}" 
+                           data-resource-namespace="${namespace}">Describe</a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item delete-action" href="#" 
+                           data-resource-type="isvc" 
+                           data-resource-name="${name}" 
+                           data-resource-namespace="${namespace}">Delete</a>
+                    </li>
+                </ul>
+            </div>
+        `;
     }
 
     function createCell(content) {
@@ -309,6 +235,55 @@
         cell.textContent = content;
         return cell;
     }
+
+    function setupActionListeners(container) {
+        // Copy URL buttons
+        container.querySelectorAll('.copy-url-button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const url = e.currentTarget.dataset.url;
+                navigator.clipboard.writeText(url).then(() => {
+                    showCopySuccess('Endpoint URL');
+                });
+            });
+        });
+
+        // Describe action
+        container.querySelectorAll('.describe-action').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                describeResource(
+                    e.target.dataset.resourceType,
+                    e.target.dataset.resourceName,
+                    e.target.dataset.resourceNamespace
+                );
+            });
+        });
+
+        // Delete action
+        container.querySelectorAll('.delete-action').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                showDeleteConfirmation(
+                    e.target.dataset.resourceType,
+                    e.target.dataset.resourceName,
+                    e.target.dataset.resourceNamespace
+                );
+            });
+        });
+    }
+
+    function showCopySuccess(text) {
+        const modal = document.getElementById('copySuccessModal');
+        const message = document.getElementById('copySuccessMessage');
+        message.textContent = `${text} copied to clipboard!`;
+        modal.style.display = 'block';
+        
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 2000);
+    }
+
     function describeResource(resourceType, resourceName, namespace = null) {
         const url = namespace 
             ? `/api/describe/${resourceType}/${resourceName}?namespace=${namespace}`
@@ -329,12 +304,11 @@
 
     function showDeleteConfirmation(resourceType, resourceName, namespace = null) {
         const modal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
-        modal.show();
-
         document.getElementById('confirmDelete').onclick = () => {
             modal.hide();
             deleteResource(resourceType, resourceName, namespace);
         };
+        modal.show();
     }
 
     function deleteResource(resourceType, resourceName, namespace = null) {
@@ -358,27 +332,14 @@
             });
     }
 
-    function viewPodLogs(podName, namespace) {
-        fetch(`/api/pod-logs/${namespace}/${podName}`)
-            .then(response => response.text())
-            .then(logs => {
-                const modal = new bootstrap.Modal(document.getElementById('podLogsModal'));
-                document.getElementById('podLogsContent').textContent = logs;
-                modal.show();
-            })
-            .catch(error => {
-                console.error('Error fetching pod logs:', error);
-                alert('Failed to fetch pod logs. Please try again.');
-            });
-    }
-
     function loadIsvcData() {
         fetch('/api/isvc')
             .then(response => response.json())
             .then(data => createInferenceServiceTable(data, 'isvc-container'))
             .catch(error => {
                 console.error('Error loading InferenceService data:', error);
-                document.getElementById('isvc-container').innerHTML = '<p>Error loading data. Please try again.</p>';
+                document.getElementById('isvc-container').innerHTML = 
+                    '<p>Error loading data. Please try again.</p>';
             });
     }
 
@@ -388,7 +349,8 @@
             .then(data => createClusterServingRuntimeTable(data, 'csr-container'))
             .catch(error => {
                 console.error('Error loading ClusterServingRuntime data:', error);
-                document.getElementById('csr-container').innerHTML = '<p>Error loading data. Please try again.</p>';
+                document.getElementById('csr-container').innerHTML = 
+                    '<p>Error loading data. Please try again.</p>';
             });
     }
 
@@ -398,7 +360,8 @@
             .then(data => createPodsTable(data, 'pods-container'))
             .catch(error => {
                 console.error('Error loading Pods data:', error);
-                document.getElementById('pods-container').innerHTML = '<p>Error loading data. Please try again.</p>';
+                document.getElementById('pods-container').innerHTML = 
+                    '<p>Error loading data. Please try again.</p>';
             });
     }
 
