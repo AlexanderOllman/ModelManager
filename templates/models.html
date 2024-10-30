@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
+<!-- Add this at the top of the page content, right after the opening main tag -->
+<div id="copySuccessModal" class="copy-success-modal" style="display: none;">
+    <span id="copySuccessMessage"></span>
+</div>
 <h2 class="mt-4">Models</h2>
 <div class="mb-3 d-flex justify-content-between align-items-center">
     <input type="text" id="modelSearch" class="form-control w-75" placeholder="Search by name or namespace">
@@ -85,7 +89,6 @@ function truncateUrl(url) {
     }
     return url;
 }
-
 function createModelCards(data) {
     const container = document.getElementById('models-container');
     container.innerHTML = '';
@@ -99,6 +102,7 @@ function createModelCards(data) {
         const readyCondition = safeGet(item, 'status.conditions', []).find(c => c.type === 'Ready');
         const isReady = readyCondition && readyCondition.status === 'True';
         const url = safeGet(item, 'status.url');
+        const resources = safeGet(item, 'spec.predictor.model.resources.limits', {});
         
         const card = document.createElement('div');
         card.className = 'model-card';
@@ -128,11 +132,19 @@ function createModelCards(data) {
                 Endpoint URL:
             </div>
             <div class="field-value">
-                ${truncateUrl(url)}
+                ${url || 'N/A'}
             </div>
             
             <div class="framework-tag">
                 ${getFrameworkTag(item)}
+            </div>
+
+            <div class="resources-info">
+                <span class="resource-item">CPU: ${resources.cpu || 'N/A'}</span>
+                <div class="divider"></div>
+                <span class="resource-item">Memory: ${resources.memory || 'N/A'}</span>
+                <div class="divider"></div>
+                <span class="resource-item">GPU: ${resources['nvidia.com/gpu'] || 'N/A'}</span>
             </div>
         `;
 

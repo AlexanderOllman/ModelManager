@@ -17,6 +17,10 @@ body {
     background-color: rgb(28, 28, 28);
 }
 
+.sidebar:hover {
+    width: 200px;
+}
+
 .sidebar.expanded {
     width: 200px;
 }
@@ -268,6 +272,28 @@ body {
     color: #374151;
 }
 
+/* Resources Info for Model Cards */
+.model-card .resources-info {
+    position: absolute;
+    bottom: 1rem;
+    right: 1rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.model-card .resources-info .divider {
+    width: 1px;
+    height: 12px;
+    background-color: #e5e7eb;
+}
+
+.model-card .resources-info .resource-item {
+    white-space: nowrap;
+}
+
 /* Copy URL Button */
 .copy-url-button {
     background: none;
@@ -283,14 +309,13 @@ body {
     color: #0a58ca;
 }
 
-/* Copy Success Modal */
 .copy-success-modal {
     position: fixed;
-    top: 50%;
+    top: 20px;  /* Changed from 50% */
     left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
+    transform: translateX(-50%);  /* Removed Y transform */
+    background: #01a982;
+    color: #fafafa;
     padding: 1rem 2rem;
     border-radius: 8px;
     font-size: 0.875rem;

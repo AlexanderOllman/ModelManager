@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
+<!-- Add this at the top of the page content, right after the opening main tag -->
+<div id="copySuccessModal" class="copy-success-modal" style="display: none;">
+    <span id="copySuccessMessage"></span>
+</div>
 <h2 class="mt-4">Manage</h2>
 <ul class="nav nav-tabs" id="manageTabs" role="tablist">
     <li class="nav-item" role="presentation">
@@ -274,15 +278,43 @@
     }
 
     function showCopySuccess(text) {
-        const modal = document.getElementById('copySuccessModal');
-        const message = document.getElementById('copySuccessMessage');
-        message.textContent = `${text} copied to clipboard!`;
-        modal.style.display = 'block';
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('copySuccessModal');
+    let message = document.getElementById('copySuccessMessage');
+    
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'copySuccessModal';
+        modal.className = 'copy-success-modal';
+        modal.style.display = 'none';
         
-        setTimeout(() => {
-            modal.style.display = 'none';
-        }, 2000);
+        message = document.createElement('span');
+        message.id = 'copySuccessMessage';
+        modal.appendChild(message);
+        
+        document.body.appendChild(modal);
     }
+    
+    message.textContent = `${text} copied to clipboard!`;
+    modal.style.display = 'block';
+    
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 2000);
+}
+
+// Update the click handler for copy buttons
+container.querySelectorAll('.copy-url-button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const url = e.currentTarget.dataset.url;
+        navigator.clipboard.writeText(url).then(() => {
+            showCopySuccess('Endpoint URL');
+        }).catch(err => {
+            console.error('Failed to copy text:', err);
+        });
+    });
+});
 
     function describeResource(resourceType, resourceName, namespace = null) {
         const url = namespace 
