@@ -389,6 +389,271 @@ container.querySelectorAll('.copy-url-button').forEach(btn => {
             });
     }
 
+    function createClusterServingRuntimeTable(data, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+        container.innerHTML = '<p>No items found.</p>';
+        return;
+    }
+    const table = document.createElement('table');
+    table.className = 'table table-striped table-hover';
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['Name', 'Protocols', 'Container Image', 'Supported Model Formats', 'Created At', 'Actions'].forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    data.items.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Name
+        row.appendChild(createCell(safeGet(item, 'metadata.name')));
+        
+        // Protocols
+        const protocols = safeGet(item, 'spec.supportedModelFormats.0.autoSelect.protocols', []);
+        row.appendChild(createCell(protocols.join(', ')));
+        
+        // Container Image
+        row.appendChild(createCell(safeGet(item, 'spec.containers.0.image')));
+        
+        // Supported Model Formats
+        const formats = safeGet(item, 'spec.supportedModelFormats', []).map(f => f.name || 'N/A');
+        row.appendChild(createCell(formats.join(', ')));
+        
+        // Created At
+        row.appendChild(createCell(new Date(safeGet(item, 'metadata.creationTimestamp')).toLocaleString()));
+        
+        // Actions
+        const actionsCell = document.createElement('td');
+        actionsCell.innerHTML = `
+            <div class="dropdown">
+                <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${safeGet(item, 'metadata.name')}" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${safeGet(item, 'metadata.name')}">
+                    <li><a class="dropdown-item describe-action" href="#" data-resource-type="csr" data-resource-name="${safeGet(item, 'metadata.name')}">Describe</a></li>
+                    <li><a class="dropdown-item delete-action" href="#" data-resource-type="csr" data-resource-name="${safeGet(item, 'metadata.name')}">Delete</a></li>
+                </ul>
+            </div>
+        `;
+        row.appendChild(actionsCell);
+        
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    // Add event listeners for describe and delete actions
+    container.querySelectorAll('.describe-action').forEach(btn => {
+        btn.addEventListener('click', (e) => describeResource(e.target.dataset.resourceType, e.target.dataset.resourceName));
+    });
+    container.querySelectorAll('.delete-action').forEach(btn => {
+        btn.addEventListener('click', (e) => showDeleteConfirmation(e.target.dataset.resourceType, e.target.dataset.resourceName));
+    });
+}
+
+function createPodsTable(data, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+        container.innerHTML = '<p>No pods found.</p>';
+        return;
+    }
+    const table = document.createElement('table');
+    table.className = 'table table-striped table-hover';
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['Name', 'Namespace', 'Status', 'Age', 'Actions'].forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    data.items.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Name
+        row.appendChild(createCell(safeGet(item, 'metadata.name')));
+        
+        // Namespace
+        row.appendChild(createCell(safeGet(item, 'metadata.namespace')));
+        
+        // Status
+        row.appendChild(createCell(safeGet(item, 'status.phase')));
+        
+        // Age
+        const creationTime = new Date(safeGet(item, 'metadata.creationTimestamp'));
+        const age = Math.floor((new Date() - creationTime) / (1000 * 60 * 60 * 24)); // Age in days
+        row.appendChild(createCell(`${age} day${age !== 1 ? 's' : ''}`));
+        
+        // Actions
+        const actionsCell = document.createElement('td');
+        actionsCell.innerHTML = `
+            <button class="btn btn-sm btn-primary view-logs" data-pod-name="${safeGet(item, 'metadata.name')}" data-namespace="${safeGet(item, 'metadata.namespace')}">
+                Logs
+            </button>
+        `;
+        row.appendChild(actionsCell);
+        
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    // Add event listeners for viewing logs
+    container.querySelectorAll('.view-logs').forEach(btn => {
+        btn.addEventListener('click', (e) => viewPodLogs(e.target.dataset.podName, e.target.dataset.namespace));
+    });
+}
+
+function createInferenceServiceTable(data, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    if (!data.items || data.items.length === 0) {
+        container.innerHTML = '<p>No items found.</p>';
+        return;
+    }
+    const table = document.createElement('table');
+    table.className = 'table table-striped table-hover';
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    ['Name', 'Namespace', 'Model', 'Resources', 'Endpoint URL', 'Ready', 'Actions'].forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    const tbody = document.createElement('tbody');
+    data.items.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Name
+        row.appendChild(createCell(safeGet(item, 'metadata.name')));
+        
+        // Namespace
+        row.appendChild(createCell(safeGet(item, 'metadata.namespace')));
+        
+        // Model
+        row.appendChild(createCell(safeGet(item, 'spec.predictor.model.modelFormat.name')));
+        
+        // Resources
+        const resources = safeGet(item, 'spec.predictor.model.resources.limits', {});
+        const resourcesCell = document.createElement('td');
+        resourcesCell.innerHTML = `
+            <div class="resources-grid">
+                <div class="resource-column">
+                    <div class="header">CPU</div>
+                    <div class="value">${resources.cpu || 'N/A'}</div>
+                </div>
+                <div class="divider"></div>
+                <div class="resource-column">
+                    <div class="header">Memory</div>
+                    <div class="value">${resources.memory || 'N/A'}</div>
+                </div>
+                <div class="divider"></div>
+                <div class="resource-column">
+                    <div class="header">GPU</div>
+                    <div class="value">${resources['nvidia.com/gpu'] || 'N/A'}</div>
+                </div>
+            </div>
+        `;
+        row.appendChild(resourcesCell);
+        
+        // URL
+        const urlCell = document.createElement('td');
+        const url = safeGet(item, 'status.url');
+        urlCell.innerHTML = `
+            <div class="d-flex align-items-center">
+                <span>${url || 'N/A'}</span>
+                ${url ? `
+                    <button class="copy-url-button" data-url="${url}" title="Copy URL">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                ` : ''}
+            </div>
+        `;
+        row.appendChild(urlCell);
+        
+        // Ready Status
+        const readyCell = document.createElement('td');
+        const readyCondition = safeGet(item, 'status.conditions', []).find(c => c.type === 'Ready');
+        const isReady = readyCondition && readyCondition.status === 'True';
+        readyCell.innerHTML = `
+            <span class="badge ${isReady ? 'bg-success' : 'bg-danger'}">
+                ${isReady ? 'Ready' : 'Not Ready'}
+            </span>
+        `;
+        row.appendChild(readyCell);
+        
+        // Actions
+        const actionsCell = document.createElement('td');
+        actionsCell.innerHTML = `
+            <div class="dropdown">
+                <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownMenuButton-${safeGet(item, 'metadata.name')}" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton-${safeGet(item, 'metadata.name')}">
+                    <li><a class="dropdown-item describe-action" href="#" data-resource-type="isvc" data-resource-name="${safeGet(item, 'metadata.name')}" data-resource-namespace="${safeGet(item, 'metadata.namespace')}">Describe</a></li>
+                    <li><a class="dropdown-item delete-action" href="#" data-resource-type="isvc" data-resource-name="${safeGet(item, 'metadata.name')}" data-resource-namespace="${safeGet(item, 'metadata.namespace')}">Delete</a></li>
+                </ul>
+            </div>
+        `;
+        row.appendChild(actionsCell);
+        
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
+
+    // Add event listeners
+    container.querySelectorAll('.copy-url-button').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const url = e.currentTarget.dataset.url;
+            navigator.clipboard.writeText(url).then(() => {
+                showCopySuccess('Endpoint URL');
+            });
+        });
+    });
+
+    container.querySelectorAll('.describe-action').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            describeResource(
+                e.target.dataset.resourceType,
+                e.target.dataset.resourceName,
+                e.target.dataset.resourceNamespace
+            );
+        });
+    });
+
+    container.querySelectorAll('.delete-action').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showDeleteConfirmation(
+                e.target.dataset.resourceType,
+                e.target.dataset.resourceName,
+                e.target.dataset.resourceNamespace
+            );
+        });
+    });
+}
+
+function createCell(content) {
+    const cell = document.createElement('td');
+    cell.textContent = content;
+    return cell;
+}
+
     function loadPodsData() {
         fetch('/api/pods')
             .then(response => response.json())

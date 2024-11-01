@@ -227,6 +227,14 @@
 
 {% block scripts %}
 <script>
+// Global variables
+let models = [];
+let availableModels = [];
+let gpuInfo = [];
+let progressInterval;
+let progressValue = 0;
+const socket = io();
+
 // Helper Functions
 function safeGet(obj, path, defaultValue = 'N/A') {
     try {
@@ -263,215 +271,6 @@ function applyFrameworkStyles(card, modelName) {
             frameworkTag.style.color = '#FFFFFF';
         }
     }
-}
-
-function showCopySuccess(text) {
-    let modal = document.getElementById('copySuccessModal');
-    let message = document.getElementById('copySuccessMessage');
-    
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'copySuccessModal';
-        modal.className = 'copy-success-modal';
-        modal.style.display = 'none';
-        
-        message = document.createElement('span');
-        message.id = 'copySuccessMessage';
-        modal.appendChild(message);
-        
-        document.body.appendChild(modal);
-    }
-    
-    message.textContent = `${text} copied to clipboard!`;
-    modal.style.display = 'block';
-    
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 2000);
-}
-
-// Form and Framework Selection Functions
-function setupFrameworkSelection() {
-    const frameworkCards = document.querySelectorAll('.framework-card');
-    const forms = document.querySelectorAll('.framework-form');
-    const resourcesSection = document.getElementById('resources-section');
-
-    function toggleRequiredAttributes(formId, enable) {
-        const form = document.getElementById(formId);
-        if (form) {
-            form.querySelectorAll('input[required], select[required]').forEach(input => {
-                if (enable) {
-                    input.setAttribute('required', '');
-                } else {
-                    input.removeAttribute('required');
-                }
-            });
-        }
-    }
-
-    forms.forEach(form => {
-        toggleRequiredAttributes(form.id, false);
-    });
-
-    frameworkCards.forEach(card => {
-        card.addEventListener('click', function() {
-            frameworkCards.forEach(c => c.classList.remove('selected'));
-            forms.forEach(f => {
-                f.style.display = 'none';
-                toggleRequiredAttributes(f.id, false);
-            });
-            
-            this.classList.add('selected');
-            const framework = this.dataset.framework;
-            const selectedForm = document.getElementById(`${framework}-form`);
-            if (selectedForm) {
-                selectedForm.style.display = 'block';
-                toggleRequiredAttributes(`${framework}-form`, true);
-                resourcesSection.style.display = 'block';
-                
-                const resourceInputs = resourcesSection.querySelectorAll('input[data-required="true"]');
-                resourceInputs.forEach(input => input.setAttribute('required', ''));
-            }
-            
-            const radio = this.querySelector('input[type="radio"]');
-            if (radio) {
-                radio.checked = true;
-            }
-        });
-    });
-}
-
-// Card Creation and Management Functions
-function createModelCards(data) {
-    const container = document.getElementById('models-container');
-    container.innerHTML = '';
-    if (data.length === 0) {
-        container.innerHTML = '<p>No models found.</p>';
-        return;
-    }
-    
-    data.forEach(model => {
-        const card = document.createElement('div');
-        card.className = 'model-card';
-        
-        const resources = model.resources || {};
-        card.innerHTML = `
-            <div class="tag">
-                <span>${model.framework === 'vllm' ? 'vLLM' : 'NVIDIA NIM'}</span>
-            </div>
-            <div class="deployment-date">
-                <span>Added ${new Date(model.addedDate).toLocaleString()}</span>
-            </div>
-            <h1>${model.modelName}</h1>
-            <p>
-                Namespace: ${model.namespace}<br>
-                ${model.framework === 'vllm' ? 
-                    `Model: ${model.model}` : 
-                    `Storage URI: ${model.storageUri}`}
-            </p>
-            <div class="resources-info">
-                <span class="resource-item">CPU: ${resources.cpu || 'N/A'}</span>
-                <div class="divider"></div>
-                <span class="resource-item">Memory: ${resources.memory || 'N/A'}</span>
-                <div class="divider"></div>
-                <span class="resource-item">GPU: ${resources.gpu || 'N/A'}</span>
-            </div>
-            <div class="d-flex justify-content-between mt-3">
-                <button class="btn btn-primary deploy-btn" data-model-name="${model.modelName}">Deploy</button>
-                <button class="btn btn-danger delete-btn" data-model-name="${model.modelName}">Delete</button>
-            </div>
-        `;
-
-        applyFrameworkStyles(card, model.modelName);
-        container.appendChild(card);
-    });
-
-    // Add event listeners
-    document.querySelectorAll('.deploy-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => deployModel(e.target.dataset.modelName));
-    });
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => showDeleteConfirmation(e.target.dataset.modelName));
-    });
-}
-
-// Form and Resource Management Functions
-function calculateGPULimit(gpuMemoryNeededMB) {
-    let gpuLimit = 0;
-    let totalGpuMemory = 0;
-
-    for (let i = 1; i < gpuInfo.length; i++) {
-        const node = gpuInfo[i];
-        const nodeGpuCount = parseInt(node.gpuCount) || 0;
-        const nodeGpuMemory = parseInt(node.gpuMemory) || 0;
-        const nodeGpuTotalMemory = nodeGpuCount * nodeGpuMemory;
-        
-        totalGpuMemory += nodeGpuTotalMemory;
-
-        if (totalGpuMemory >= gpuMemoryNeededMB && gpuLimit === 0) {
-            gpuLimit = Math.ceil(gpuMemoryNeededMB / nodeGpuMemory);
-        }
-    }
-
-    if (gpuLimit === 0 && totalGpuMemory > 0) {
-        gpuLimit = Math.ceil(gpuMemoryNeededMB / totalGpuMemory);
-    }
-
-    const gpuInput = document.getElementById('gpuLimit');
-    if (gpuInput) {
-        gpuInput.value = Math.max(1, gpuLimit);
-    }
-}
-
-function calculateResources() {
-    const modelSizeInput = document.getElementById('modelSize');
-    if (!modelSizeInput) return;
-
-    const modelSize = parseFloat(modelSizeInput.value);
-    if (isNaN(modelSize) || modelSize <= 0) return;
-
-    const activeFramework = document.querySelector('.framework-card.selected')?.dataset.framework;
-    if (!activeFramework) return;
-
-    const quantizationSelect = document.getElementById(`${activeFramework}Quantization`);
-    const quantization = quantizationSelect ? parseInt(quantizationSelect.value) : 16;
-
-    const cpuLimit = Math.max(2, Math.ceil(modelSize / 2));
-    const memoryLimit = Math.max(4, Math.ceil(modelSize * 2));
-    const gpuMemoryNeededMB = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6;
-
-    const cpuInput = document.getElementById('cpuLimit');
-    const memoryInput = document.getElementById('memoryLimit');
-    
-    if (cpuInput) cpuInput.value = cpuLimit;
-    if (memoryInput) memoryInput.value = memoryLimit;
-
-    if (!gpuInfo || gpuInfo.length === 0) {
-        fetch('/api/gpu-info')
-            .then(response => response.json())
-            .then(data => {
-                gpuInfo = data;
-                calculateGPULimit(gpuMemoryNeededMB);
-            })
-            .catch(error => {
-                console.error('Error fetching GPU info:', error);
-            });
-    } else {
-        calculateGPULimit(gpuMemoryNeededMB);
-    }
-}
-
-// Deployment and Progress Functions
-function startProgressBar() {
-    progressValue = 0;
-    document.getElementById('deploymentProgressBar').style.width = '0%';
-    progressInterval = setInterval(() => {
-        progressValue += 5;
-        if (progressValue <= 95) {
-            document.getElementById('deploymentProgressBar').style.width = `${progressValue}%`;
-            document.getElementById('deploymentProgressBar').setAttribute('aria-valuenow', progressValue);
-        }
-    }, 10000);
 }
 
 function setupFrameworkSelection() {
@@ -746,6 +545,187 @@ function saveNewModel(e) {
         hideAddModelForm();
         createModelCards(models);
     }
+}
+
+function showCopySuccess(text) {
+    let modal = document.getElementById('copySuccessModal');
+    let message = document.getElementById('copySuccessMessage');
+    
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'copySuccessModal';
+        modal.className = 'copy-success-modal';
+        modal.style.display = 'none';
+        
+        message = document.createElement('span');
+        message.id = 'copySuccessMessage';
+        modal.appendChild(message);
+        
+        document.body.appendChild(modal);
+    }
+    
+    message.textContent = `${text} copied to clipboard!`;
+    modal.style.display = 'block';
+    
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 2000);
+}
+
+// Socket event handlers
+socket.on('deployment_status', function(data) {
+    const statusBody = document.getElementById('deploymentStatusBody');
+    const statusMessage = document.createElement('p');
+    statusMessage.textContent = data.message;
+    statusMessage.classList.add(`status-${data.status}`);
+    statusBody.appendChild(statusMessage);
+    statusBody.scrollTop = statusBody.scrollHeight;
+
+    if (data.final) {
+        clearInterval(progressInterval);
+        document.getElementById('deploymentProgressBar').style.width = '100%';
+        document.getElementById('deploymentProgressBar').setAttribute('aria-valuenow', '100');
+        document.getElementById('deploymentSpinner').style.display = 'none';
+
+        if (data.status === 'success') {
+            setTimeout(() => {
+                window.location.href = '/models';
+            }, 2000);
+        }
+    }
+});
+
+// Card Creation and Management Functions
+function createModelCards(data) {
+    const container = document.getElementById('models-container');
+    container.innerHTML = '';
+    if (data.length === 0) {
+        container.innerHTML = '<p>No models found.</p>';
+        return;
+    }
+    
+    data.forEach(model => {
+        const card = document.createElement('div');
+        card.className = 'model-card';
+        
+        const resources = model.resources || {};
+        card.innerHTML = `
+            <div class="tag">
+                <span>${model.framework === 'vllm' ? 'vLLM' : 'NVIDIA NIM'}</span>
+            </div>
+            <div class="deployment-date">
+                <span>Added ${new Date(model.addedDate).toLocaleString()}</span>
+            </div>
+            <h1>${model.modelName}</h1>
+            <p>
+                Namespace: ${model.namespace}<br>
+                ${model.framework === 'vllm' ? 
+                    `Model: ${model.model}` : 
+                    `Storage URI: ${model.storageUri}`}
+            </p>
+            <div class="resources-info">
+                <span class="resource-item">CPU: ${resources.cpu || 'N/A'}</span>
+                <div class="divider"></div>
+                <span class="resource-item">Memory: ${resources.memory || 'N/A'}</span>
+                <div class="divider"></div>
+                <span class="resource-item">GPU: ${resources.gpu || 'N/A'}</span>
+            </div>
+            <div class="d-flex justify-content-between mt-3">
+                <button class="btn btn-primary deploy-btn" data-model-name="${model.modelName}">Deploy</button>
+                <button class="btn btn-danger delete-btn" data-model-name="${model.modelName}">Delete</button>
+            </div>
+        `;
+
+        applyFrameworkStyles(card, model.modelName);
+        container.appendChild(card);
+    });
+
+    // Add event listeners
+    document.querySelectorAll('.deploy-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => deployModel(e.target.dataset.modelName));
+    });
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => showDeleteConfirmation(e.target.dataset.modelName));
+    });
+}
+
+// Form and Resource Management Functions
+function calculateGPULimit(gpuMemoryNeededMB) {
+    let gpuLimit = 0;
+    let totalGpuMemory = 0;
+
+    for (let i = 1; i < gpuInfo.length; i++) {
+        const node = gpuInfo[i];
+        const nodeGpuCount = parseInt(node.gpuCount) || 0;
+        const nodeGpuMemory = parseInt(node.gpuMemory) || 0;
+        const nodeGpuTotalMemory = nodeGpuCount * nodeGpuMemory;
+        
+        totalGpuMemory += nodeGpuTotalMemory;
+
+        if (totalGpuMemory >= gpuMemoryNeededMB && gpuLimit === 0) {
+            gpuLimit = Math.ceil(gpuMemoryNeededMB / nodeGpuMemory);
+        }
+    }
+
+    if (gpuLimit === 0 && totalGpuMemory > 0) {
+        gpuLimit = Math.ceil(gpuMemoryNeededMB / totalGpuMemory);
+    }
+
+    const gpuInput = document.getElementById('gpuLimit');
+    if (gpuInput) {
+        gpuInput.value = Math.max(1, gpuLimit);
+    }
+}
+
+function calculateResources() {
+    const modelSizeInput = document.getElementById('modelSize');
+    if (!modelSizeInput) return;
+
+    const modelSize = parseFloat(modelSizeInput.value);
+    if (isNaN(modelSize) || modelSize <= 0) return;
+
+    const activeFramework = document.querySelector('.framework-card.selected')?.dataset.framework;
+    if (!activeFramework) return;
+
+    const quantizationSelect = document.getElementById(`${activeFramework}Quantization`);
+    const quantization = quantizationSelect ? parseInt(quantizationSelect.value) : 16;
+
+    const cpuLimit = Math.max(2, Math.ceil(modelSize / 2));
+    const memoryLimit = Math.max(4, Math.ceil(modelSize * 2));
+    const gpuMemoryNeededMB = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6;
+
+    const cpuInput = document.getElementById('cpuLimit');
+    const memoryInput = document.getElementById('memoryLimit');
+    
+    if (cpuInput) cpuInput.value = cpuLimit;
+    if (memoryInput) memoryInput.value = memoryLimit;
+
+    if (!gpuInfo || gpuInfo.length === 0) {
+        fetch('/api/gpu-info')
+            .then(response => response.json())
+            .then(data => {
+                gpuInfo = data;
+                calculateGPULimit(gpuMemoryNeededMB);
+            })
+            .catch(error => {
+                console.error('Error fetching GPU info:', error);
+            });
+    } else {
+        calculateGPULimit(gpuMemoryNeededMB);
+    }
+}
+
+// Deployment and Progress Functions
+function startProgressBar() {
+    progressValue = 0;
+    document.getElementById('deploymentProgressBar').style.width = '0%';
+    progressInterval = setInterval(() => {
+        progressValue += 5;
+        if (progressValue <= 95) {
+            document.getElementById('deploymentProgressBar').style.width = `${progressValue}%`;
+            document.getElementById('deploymentProgressBar').setAttribute('aria-valuenow', progressValue);
+        }
+    }, 10000);
 }
 
 function deployModel(modelName) {
