@@ -304,9 +304,8 @@
     setTimeout(() => {
         modal.style.display = 'none';
     }, 2000);
-}
 
-// Update the click handler for copy buttons
+    // Update the click handler for copy buttons
 container.querySelectorAll('.copy-url-button').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -318,6 +317,7 @@ container.querySelectorAll('.copy-url-button').forEach(btn => {
         });
     });
 });
+}
 
     function describeResource(resourceType, resourceName, namespace = null) {
         const url = namespace 
