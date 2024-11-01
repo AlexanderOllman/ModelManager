@@ -474,6 +474,280 @@ function startProgressBar() {
     }, 10000);
 }
 
+function setupFrameworkSelection() {
+    const frameworkCards = document.querySelectorAll('.framework-card');
+    const forms = document.querySelectorAll('.framework-form');
+    const resourcesSection = document.getElementById('resources-section');
+
+    function toggleRequiredAttributes(formId, enable) {
+        const form = document.getElementById(formId);
+        if (form) {
+            form.querySelectorAll('input[required], select[required]').forEach(input => {
+                if (enable) {
+                    input.setAttribute('required', '');
+                } else {
+                    input.removeAttribute('required');
+                }
+            });
+        }
+    }
+
+    forms.forEach(form => {
+        toggleRequiredAttributes(form.id, false);
+    });
+
+    frameworkCards.forEach(card => {
+        card.addEventListener('click', function() {
+            frameworkCards.forEach(c => c.classList.remove('selected'));
+            
+            forms.forEach(f => {
+                f.style.display = 'none';
+                toggleRequiredAttributes(f.id, false);
+            });
+            
+            this.classList.add('selected');
+            const framework = this.dataset.framework;
+            const selectedForm = document.getElementById(`${framework}-form`);
+            if (selectedForm) {
+                selectedForm.style.display = 'block';
+                toggleRequiredAttributes(`${framework}-form`, true);
+                resourcesSection.style.display = 'block';
+
+                const resourceInputs = resourcesSection.querySelectorAll('input[data-required="true"]');
+                resourceInputs.forEach(input => input.setAttribute('required', ''));
+            }
+            
+            const radio = this.querySelector('input[type="radio"]');
+            if (radio) {
+                radio.checked = true;
+            }
+        });
+    });
+}
+
+function setupVLLMForm() {
+    const modelSelect = document.getElementById('vllmModel');
+    const customModelDiv = document.getElementById('vllmCustomModel');
+    const deployNameInput = document.getElementById('vllmDeployName');
+    const otherModelModal = new bootstrap.Modal(document.getElementById('otherModelModal'));
+
+    // Fetch available models and populate select
+    fetch('/api/list-models')
+        .then(response => response.json())
+        .then(data => {
+            availableModels = data;
+            data.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.full_repo;
+                option.textContent = model.full_repo;
+                modelSelect.insertBefore(option, modelSelect.lastElementChild);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching models:', error);
+        });
+
+    modelSelect.addEventListener('change', function() {
+        if (this.value === 'other') {
+            otherModelModal.show();
+        } else if (this.value) {
+            customModelDiv.style.display = 'none';
+            document.getElementById('vllmModelName')?.removeAttribute('required');
+            document.getElementById('vllmStorageUri')?.removeAttribute('required');
+            deployNameInput.value = this.value.toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+    });
+
+    document.getElementById('continueCustomModel').addEventListener('click', function() {
+        customModelDiv.style.display = 'block';
+        document.getElementById('vllmModelName')?.setAttribute('required', '');
+        document.getElementById('vllmStorageUri')?.setAttribute('required', '');
+        otherModelModal.hide();
+    });
+
+    document.getElementById('cancelCustomModel').addEventListener('click', function() {
+        modelSelect.value = '';
+        customModelDiv.style.display = 'none';
+        document.getElementById('vllmModelName')?.removeAttribute('required');
+        document.getElementById('vllmStorageUri')?.removeAttribute('required');
+        otherModelModal.hide();
+    });
+}
+
+function setupNamespaceDropdowns() {
+    const namespaceInputs = ['namespace', 'vllmNamespace'].map(id => document.getElementById(id));
+    
+    function populateNamespaceDropdown(input, dropdownId, filter = '') {
+        if (!input) return;
+        const dropdown = document.getElementById(dropdownId);
+        if (!dropdown) return;
+        
+        fetch('/api/namespaces')
+            .then(response => response.json())
+            .then(namespaces => {
+                dropdown.innerHTML = '';
+                const filteredNamespaces = namespaces.filter(ns => 
+                    ns.toLowerCase().includes(filter.toLowerCase())
+                );
+                filteredNamespaces.forEach(ns => {
+                    const li = document.createElement('li');
+                    li.innerHTML = `<a class="dropdown-item" href="#">${ns}</a>`;
+                    li.querySelector('a').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        input.value = ns;
+                        dropdown.style.display = 'none';
+                    });
+                    dropdown.appendChild(li);
+                });
+                dropdown.style.display = filteredNamespaces.length > 0 ? 'block' : 'none';
+            })
+            .catch(error => {
+                console.error('Error fetching namespaces:', error);
+            });
+    }
+
+    namespaceInputs.forEach(input => {
+        if (!input) return;
+        const dropdownId = `${input.id}Dropdown`;
+        
+        input.addEventListener('focus', () => {
+            populateNamespaceDropdown(input, dropdownId, input.value);
+        });
+
+        input.addEventListener('input', () => {
+            populateNamespaceDropdown(input, dropdownId, input.value);
+        });
+
+        input.addEventListener('blur', () => {
+            setTimeout(() => {
+                const dropdown = document.getElementById(dropdownId);
+                if (dropdown) {
+                    dropdown.style.display = 'none';
+                }
+            }, 200);
+        });
+    });
+}
+
+function showDeleteConfirmation(modelName) {
+    if (confirm(`Are you sure you want to delete ${modelName}?`)) {
+        const model = models.find(m => m.modelName === modelName);
+        if (model) {
+            models = models.filter(m => m.modelName !== modelName);
+            localStorage.setItem('models', JSON.stringify(models));
+            createModelCards(models);
+        }
+    }
+}
+
+function showAddModelForm() {
+    document.getElementById('models-container').style.display = 'none';
+    document.getElementById('add-model-form').style.display = 'block';
+    document.getElementById('modelSearch').style.display = 'none';
+    document.getElementById('addModelBtn').style.display = 'none';
+}
+
+function hideAddModelForm() {
+    document.getElementById('models-container').style.display = 'flex';
+    document.getElementById('add-model-form').style.display = 'none';
+    document.getElementById('modelSearch').style.display = 'block';
+    document.getElementById('addModelBtn').style.display = 'block';
+    document.getElementById('newModelForm').reset();
+    document.querySelectorAll('.framework-card').forEach(card => card.classList.remove('selected'));
+    document.querySelectorAll('.framework-form').forEach(form => {
+        form.style.display = 'none';
+        form.querySelectorAll('input[required], select[required]').forEach(input => {
+            input.removeAttribute('required');
+        });
+    });
+    document.getElementById('resources-section').style.display = 'none';
+    document.querySelectorAll('.collapse').forEach(collapse => {
+        if (collapse.classList.contains('show')) {
+            collapse.classList.remove('show');
+        }
+    });
+}
+
+function filterModels() {
+    const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
+    document.querySelectorAll('.model-card').forEach(card => {
+        const name = card.querySelector('h1').textContent.toLowerCase();
+        const content = card.querySelector('p').textContent.toLowerCase();
+        if (name.includes(searchTerm) || content.includes(searchTerm)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+function saveNewModel(e) {
+    e.preventDefault();
+    const framework = document.querySelector('.framework-card.selected')?.dataset.framework;
+    if (!framework) {
+        alert('Please select a framework');
+        return;
+    }
+
+    let newModel = null;
+
+    if (framework === 'vllm') {
+        const modelSelect = document.getElementById('vllmModel');
+        const modelValue = modelSelect.value;
+        const customModel = modelValue === 'other';
+
+        if (!modelValue) {
+            alert('Please select a model');
+            return;
+        }
+
+        if (customModel && !document.getElementById('vllmModelName').value) {
+            alert('Please enter a model name');
+            return;
+        }
+
+        newModel = {
+            framework: 'vllm',
+            modelName: document.getElementById('vllmDeployName').value,
+            namespace: document.getElementById('vllmNamespace').value,
+            containerImage: document.getElementById('vllmContainerImage').value,
+            model: customModel ? document.getElementById('vllmModelName').value : modelValue,
+            storageUri: customModel ? 
+                document.getElementById('vllmStorageUri').value.replace('pvc://', '') : 
+                'models-pvc',
+            resources: {
+                cpu: document.getElementById('cpuLimit').value,
+                memory: `${document.getElementById('memoryLimit').value}Gi`,
+                gpu: document.getElementById('gpuLimit').value
+            },
+            addedDate: new Date().toISOString()
+        };
+    } else if (framework === 'nvidia-nim') {
+        newModel = {
+            framework: 'nvidia-nim',
+            modelName: document.getElementById('modelName').value,
+            namespace: document.getElementById('namespace').value,
+            containerImage: document.getElementById('containerImage').value,
+            storageUri: document.getElementById('storageUri').value,
+            resources: {
+                cpu: document.getElementById('cpuLimit').value,
+                memory: `${document.getElementById('memoryLimit').value}Gi`,
+                gpu: document.getElementById('gpuLimit').value
+            },
+            addedDate: new Date().toISOString()
+        };
+    }
+
+    if (newModel) {
+        models.push(newModel);
+        localStorage.setItem('models', JSON.stringify(models));
+        hideAddModelForm();
+        createModelCards(models);
+    }
+}
+
 function deployModel(modelName) {
     const model = models.find(m => m.modelName === modelName);
     if (!model) return;
