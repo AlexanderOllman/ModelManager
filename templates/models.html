@@ -43,6 +43,7 @@
 
 {% block scripts %}
 <script>
+// Helper Functions
 function safeGet(obj, path, defaultValue = 'N/A') {
     try {
         return path.split('.').reduce((o, k) => (o || {})[k], obj) || defaultValue;
@@ -51,18 +52,32 @@ function safeGet(obj, path, defaultValue = 'N/A') {
     }
 }
 
-function getFrameworkTag(item) {
-    const model = safeGet(item, 'spec.predictor.model.modelFormat.name', '').toLowerCase();
-    if (model.includes('llama') || model.includes('nvidia-nim')) {
-        return 'LL';
-    } else if (model.includes('tensorflow')) {
-        return 'TF';
-    } else if (model.includes('pytorch')) {
-        return 'PT';
-    } else if (model.includes('onnx')) {
-        return 'ONNX';
-    } else {
-        return 'DI';
+function getModelFramework(modelName) {
+    if (!modelName) return 'other';
+    const prefix = modelName.toLowerCase().split('-')[0];
+    if (prefix === 'nvidia') return 'nvidia';
+    if (prefix === 'vllm') return 'vllm';
+    return 'other';
+}
+
+function applyFrameworkStyles(card, modelName) {
+    const framework = getModelFramework(modelName);
+    const frameworkTag = card.querySelector('.framework-tag');
+    
+    card.classList.remove('vllm-card', 'nvidia-card');
+    
+    if (framework === 'nvidia') {
+        card.classList.add('nvidia-card');
+        if (frameworkTag) {
+            frameworkTag.style.backgroundColor = '#76B900';
+            frameworkTag.style.color = '#FFFFFF';
+        }
+    } else if (framework === 'vllm') {
+        card.classList.add('vllm-card');
+        if (frameworkTag) {
+            frameworkTag.style.backgroundColor = '#fcb516';
+            frameworkTag.style.color = '#FFFFFF';
+        }
     }
 }
 
@@ -82,13 +97,49 @@ function formatDate(dateString) {
     }
 }
 
-function truncateUrl(url) {
-    if (!url) return 'N/A';
-    if (url.length > 50) {
-        return url.substring(0, 47) + '...';
+function getFrameworkTag(item) {
+    const modelName = safeGet(item, 'metadata.name', '').toLowerCase();
+    if (modelName.startsWith('nvidia')) {
+        return 'LL';
+    } else if (modelName.startsWith('vllm')) {
+        return 'DI';
+    } else if (modelName.includes('tensorflow')) {
+        return 'TF';
+    } else if (modelName.includes('pytorch')) {
+        return 'PT';
+    } else if (modelName.includes('onnx')) {
+        return 'ONNX';
+    } else {
+        return 'DI';
     }
-    return url;
 }
+
+function showCopySuccess(text) {
+    let modal = document.getElementById('copySuccessModal');
+    let message = document.getElementById('copySuccessMessage');
+    
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'copySuccessModal';
+        modal.className = 'copy-success-modal';
+        modal.style.display = 'none';
+        
+        message = document.createElement('span');
+        message.id = 'copySuccessMessage';
+        modal.appendChild(message);
+        
+        document.body.appendChild(modal);
+    }
+    
+    message.textContent = `${text} copied to clipboard!`;
+    modal.style.display = 'block';
+    
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 2000);
+}
+
+// Main Card Creation Function
 function createModelCards(data) {
     const container = document.getElementById('models-container');
     container.innerHTML = '';
@@ -103,6 +154,7 @@ function createModelCards(data) {
         const isReady = readyCondition && readyCondition.status === 'True';
         const url = safeGet(item, 'status.url');
         const resources = safeGet(item, 'spec.predictor.model.resources.limits', {});
+        const modelName = safeGet(item, 'metadata.name');
         
         const card = document.createElement('div');
         card.className = 'model-card';
@@ -118,7 +170,7 @@ function createModelCards(data) {
             </div>
             
             <div class="model-name">
-                ${safeGet(item, 'metadata.name')}
+                ${modelName}
             </div>
             
             <div class="field-label">
@@ -148,21 +200,12 @@ function createModelCards(data) {
             </div>
         `;
 
+        applyFrameworkStyles(card, modelName);
         container.appendChild(card);
     });
 }
 
-function showCopySuccess(modelName) {
-    const modal = document.getElementById('copySuccessModal');
-    const message = document.getElementById('copySuccessMessage');
-    message.textContent = `${modelName} endpoint URL copied to clipboard!`;
-    modal.style.display = 'block';
-    
-    setTimeout(() => {
-        modal.style.display = 'none';
-    }, 2000);
-}
-
+// Event Handlers and Initialization
 function filterModels() {
     const searchTerm = document.getElementById('modelSearch').value.toLowerCase();
     document.querySelectorAll('.model-card').forEach(card => {
@@ -176,6 +219,19 @@ function filterModels() {
     });
 }
 
+// Add stylesheet
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+    .vllm-card {
+        background-color: rgba(48, 162, 255, 0.5) !important;
+    }
+    
+    .nvidia-card {
+        background-color: rgba(118, 185, 0, 0.5) !important;
+    }
+`;
+document.head.appendChild(styleSheet);
+
 // Event Listeners
 document.getElementById('modelSearch').addEventListener('input', filterModels);
 
@@ -187,7 +243,7 @@ document.addEventListener('click', function(e) {
     const modelName = modelCard.querySelector('.model-name').textContent.trim();
     
     navigator.clipboard.writeText(url).then(() => {
-        showCopySuccess(modelName);
+        showCopySuccess(`${modelName} endpoint URL`);
     }).catch(err => {
         console.error('Failed to copy text:', err);
     });
@@ -202,5 +258,7 @@ fetch('/api/isvc')
         document.getElementById('models-container').innerHTML = 
             '<p>Error loading models. Please try again later.</p>';
     });
+
+
 </script>
 {% endblock %}

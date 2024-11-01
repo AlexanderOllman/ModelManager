@@ -226,9 +226,77 @@ body {
     color: #991b1b;
 }
 
+/* Model Cards Grid Layout */
+#models-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 2rem;
+    padding: 1rem;
+}
+
+/* Card Base Styles */
+.model-card {
+    --push: 8px;
+    aspect-ratio: 1;
+    width: 100%;
+    height: 320px;
+    border: 1px solid black;
+    border-radius: 12px;
+    padding: 1.5rem;
+    background-color: white;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.15s ease-in-out;
+    box-shadow: var(--push) var(--push) 0 0 black;
+    will-change: box-shadow, transform;
+}
+
+/* Framework-specific card styles */
+.model-card.nvidia-card {
+    background-color: rgba(118, 185, 0, 0.5) !important;
+}
+
+.model-card.vllm-card {
+    background-color: rgba(48, 162, 255, 0.5) !important;
+}
+
+.model-card:active {
+    box-shadow: 0 0 0 0 black;
+    transform: translate(var(--push), var(--push));
+}
+
+.model-card:not(:active):hover {
+    --push: 4px;
+    box-shadow: var(--push) var(--push) 0 0 black;
+    transform: translate(var(--push), var(--push));
+}
+
+/* Status Badge */
+.model-card .status-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.status-badge.ready {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.status-badge.not-ready {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
 /* Deployment Date */
 .model-card .deployment-date {
-    color: #6b7280;
+    color: #374151;
     font-size: 0.875rem;
     margin-bottom: 1.5rem;
 }
@@ -239,6 +307,7 @@ body {
     font-weight: 600;
     margin-bottom: 1.5rem;
     line-height: 1.2;
+    color: #111827;
 }
 
 /* Field Labels */
@@ -254,7 +323,7 @@ body {
 /* Field Values */
 .model-card .field-value {
     font-size: 0.875rem;
-    color: #4b5563;
+    color: #374151;
     margin-bottom: 1rem;
     word-break: break-all;
 }
@@ -270,28 +339,115 @@ body {
     font-weight: 600;
     background-color: #f3f4f6;
     color: #374151;
+    transition: all 0.2s ease-in-out;
 }
 
-/* Resources Info for Model Cards */
+/* Resources Info */
 .model-card .resources-info {
     position: absolute;
     bottom: 1rem;
     right: 1rem;
     font-size: 0.75rem;
-    color: #6b7280;
+    color: #374151;
     display: flex;
     gap: 0.75rem;
     align-items: center;
+    background-color: rgba(255, 255, 255, 0.5);
+    padding: 0.5rem;
+    border-radius: 6px;
 }
 
 .model-card .resources-info .divider {
     width: 1px;
     height: 12px;
-    background-color: #e5e7eb;
+    background-color: #374151;
 }
 
 .model-card .resources-info .resource-item {
     white-space: nowrap;
+    font-weight: 500;
+}
+
+/* Copy Success Modal */
+.copy-success-modal {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #01a982;
+    color: #fafafa;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    z-index: 1050;
+    animation: fadeInOut 2s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+    10% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    90% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+}
+
+/* Loading Spinner */
+.spinner-border {
+    margin: 2rem auto;
+    display: block;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    #models-container {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    #models-container {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+    
+    .model-card {
+        height: 300px;
+    }
+
+    .model-card .resources-info {
+        font-size: 0.7rem;
+        gap: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    #models-container {
+        grid-template-columns: 1fr;
+        padding: 0.5rem;
+        gap: 1rem;
+    }
+
+    .model-card {
+        min-width: unset;
+    }
+}
+
+/* Hover States */
+.model-card:hover .framework-tag {
+    transform: translateY(-2px);
+}
+
+.model-card:hover .resources-info {
+    background-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Framework-specific tag styles - will be overridden by JavaScript */
+.model-card.nvidia-card .framework-tag {
+    background-color: #76B900;
+    color: #FFFFFF;
+}
+
+.model-card.vllm-card .framework-tag {
+    background-color: #fcb516;
+    color: #FFFFFF;
 }
 
 /* Copy URL Button */
