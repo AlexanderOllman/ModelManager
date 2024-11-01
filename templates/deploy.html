@@ -442,31 +442,153 @@ function showDeleteConfirmation(modelName) {
 }
 
 function showAddModelForm() {
-    document.getElementById('models-container').style.display = 'none';
-    document.getElementById('add-model-form').style.display = 'block';
-    document.getElementById('modelSearch').style.display = 'none';
-    document.getElementById('addModelBtn').style.display = 'none';
+    const modelsContainer = document.getElementById('models-container');
+    const addModelForm = document.getElementById('add-model-form');
+    const modelSearch = document.getElementById('modelSearch');
+    const addModelBtn = document.getElementById('addModelBtn');
+
+    if (modelsContainer) modelsContainer.style.display = 'none';
+    if (addModelForm) addModelForm.style.display = 'block';
+    if (modelSearch) modelSearch.style.display = 'none';
+    if (addModelBtn) addModelBtn.style.display = 'none';
 }
 
 function hideAddModelForm() {
-    document.getElementById('models-container').style.display = 'flex';
-    document.getElementById('add-model-form').style.display = 'none';
-    document.getElementById('modelSearch').style.display = 'block';
-    document.getElementById('addModelBtn').style.display = 'block';
-    document.getElementById('newModelForm').reset();
-    document.querySelectorAll('.framework-card').forEach(card => card.classList.remove('selected'));
-    document.querySelectorAll('.framework-form').forEach(form => {
-        form.style.display = 'none';
-        form.querySelectorAll('input[required], select[required]').forEach(input => {
-            input.removeAttribute('required');
-        });
+    const modelsContainer = document.getElementById('models-container');
+    const addModelForm = document.getElementById('add-model-form');
+    const modelSearch = document.getElementById('modelSearch');
+    const addModelBtn = document.getElementById('addModelBtn');
+    const newModelForm = document.getElementById('newModelForm');
+    const resourcesSection = document.getElementById('resources-section');
+
+    // Reset display states
+    if (modelsContainer) modelsContainer.style.display = 'grid';  // Changed from 'flex' to 'grid'
+    if (addModelForm) addModelForm.style.display = 'none';
+    if (modelSearch) modelSearch.style.display = 'block';
+    if (addModelBtn) addModelBtn.style.display = 'block';
+
+    // Reset form if it exists
+    if (newModelForm) newModelForm.reset();
+
+    // Reset framework selections
+    document.querySelectorAll('.framework-card').forEach(card => {
+        card.classList.remove('selected');
     });
-    document.getElementById('resources-section').style.display = 'none';
-    document.querySelectorAll('.collapse').forEach(collapse => {
-        if (collapse.classList.contains('show')) {
+
+    // Reset framework forms
+    document.querySelectorAll('.framework-form').forEach(form => {
+        if (form) {
+            form.style.display = 'none';
+            // Remove required attributes
+            form.querySelectorAll('input[required], select[required]').forEach(input => {
+                input.removeAttribute('required');
+            });
+        }
+    });
+
+    // Hide resources section
+    if (resourcesSection) resourcesSection.style.display = 'none';
+
+    // Reset collapse elements
+    document.querySelectorAll('.collapse.show').forEach(collapse => {
+        if (collapse) {
             collapse.classList.remove('show');
         }
     });
+}
+
+function saveNewModel(e) {
+    e.preventDefault();
+    const selectedFrameworkCard = document.querySelector('.framework-card.selected');
+    if (!selectedFrameworkCard) {
+        alert('Please select a framework');
+        return;
+    }
+
+    const framework = selectedFrameworkCard.dataset.framework;
+    let newModel = null;
+
+    try {
+        if (framework === 'vllm') {
+            const modelSelect = document.getElementById('vllmModel');
+            if (!modelSelect) {
+                throw new Error('vLLM model select not found');
+            }
+
+            const modelValue = modelSelect.value;
+            const customModel = modelValue === 'other';
+
+            if (!modelValue) {
+                alert('Please select a model');
+                return;
+            }
+
+            const vllmModelName = document.getElementById('vllmModelName');
+            if (customModel && (!vllmModelName || !vllmModelName.value)) {
+                alert('Please enter a model name');
+                return;
+            }
+
+            newModel = {
+                framework: 'vllm',
+                modelName: document.getElementById('vllmDeployName')?.value,
+                namespace: document.getElementById('vllmNamespace')?.value,
+                containerImage: document.getElementById('vllmContainerImage')?.value,
+                model: customModel ? vllmModelName.value : modelValue,
+                storageUri: customModel ? 
+                    document.getElementById('vllmStorageUri')?.value?.replace('pvc://', '') || 'models-pvc' : 
+                    'models-pvc',
+                resources: {
+                    cpu: document.getElementById('cpuLimit')?.value,
+                    memory: `${document.getElementById('memoryLimit')?.value}Gi`,
+                    gpu: document.getElementById('gpuLimit')?.value
+                },
+                addedDate: new Date().toISOString()
+            };
+        } else if (framework === 'nvidia-nim') {
+            newModel = {
+                framework: 'nvidia-nim',
+                modelName: document.getElementById('modelName')?.value,
+                namespace: document.getElementById('namespace')?.value,
+                containerImage: document.getElementById('containerImage')?.value,
+                storageUri: document.getElementById('storageUri')?.value,
+                resources: {
+                    cpu: document.getElementById('cpuLimit')?.value,
+                    memory: `${document.getElementById('memoryLimit')?.value}Gi`,
+                    gpu: document.getElementById('gpuLimit')?.value
+                },
+                addedDate: new Date().toISOString()
+            };
+        }
+
+        if (newModel && validateModel(newModel)) {
+            models.push(newModel);
+            localStorage.setItem('models', JSON.stringify(models));
+            hideAddModelForm();
+            createModelCards(models);
+        }
+    } catch (error) {
+        console.error('Error saving model:', error);
+        alert('There was an error saving the model. Please check all required fields.');
+    }
+}
+
+// Add this new validation function
+function validateModel(model) {
+    const requiredFields = ['modelName', 'namespace', 'containerImage'];
+    const missingFields = requiredFields.filter(field => !model[field]);
+    
+    if (missingFields.length > 0) {
+        alert(`Please fill in all required fields: ${missingFields.join(', ')}`);
+        return false;
+    }
+
+    if (!model.resources?.cpu || !model.resources?.memory || !model.resources?.gpu) {
+        alert('Please specify all resource requirements (CPU, Memory, GPU)');
+        return false;
+    }
+
+    return true;
 }
 
 function filterModels() {
@@ -480,71 +602,6 @@ function filterModels() {
             card.style.display = 'none';
         }
     });
-}
-
-function saveNewModel(e) {
-    e.preventDefault();
-    const framework = document.querySelector('.framework-card.selected')?.dataset.framework;
-    if (!framework) {
-        alert('Please select a framework');
-        return;
-    }
-
-    let newModel = null;
-
-    if (framework === 'vllm') {
-        const modelSelect = document.getElementById('vllmModel');
-        const modelValue = modelSelect.value;
-        const customModel = modelValue === 'other';
-
-        if (!modelValue) {
-            alert('Please select a model');
-            return;
-        }
-
-        if (customModel && !document.getElementById('vllmModelName').value) {
-            alert('Please enter a model name');
-            return;
-        }
-
-        newModel = {
-            framework: 'vllm',
-            modelName: document.getElementById('vllmDeployName').value,
-            namespace: document.getElementById('vllmNamespace').value,
-            containerImage: document.getElementById('vllmContainerImage').value,
-            model: customModel ? document.getElementById('vllmModelName').value : modelValue,
-            storageUri: customModel ? 
-                document.getElementById('vllmStorageUri').value.replace('pvc://', '') : 
-                'models-pvc',
-            resources: {
-                cpu: document.getElementById('cpuLimit').value,
-                memory: `${document.getElementById('memoryLimit').value}Gi`,
-                gpu: document.getElementById('gpuLimit').value
-            },
-            addedDate: new Date().toISOString()
-        };
-    } else if (framework === 'nvidia-nim') {
-        newModel = {
-            framework: 'nvidia-nim',
-            modelName: document.getElementById('modelName').value,
-            namespace: document.getElementById('namespace').value,
-            containerImage: document.getElementById('containerImage').value,
-            storageUri: document.getElementById('storageUri').value,
-            resources: {
-                cpu: document.getElementById('cpuLimit').value,
-                memory: `${document.getElementById('memoryLimit').value}Gi`,
-                gpu: document.getElementById('gpuLimit').value
-            },
-            addedDate: new Date().toISOString()
-        };
-    }
-
-    if (newModel) {
-        models.push(newModel);
-        localStorage.setItem('models', JSON.stringify(models));
-        hideAddModelForm();
-        createModelCards(models);
-    }
 }
 
 function showCopySuccess(text) {
@@ -817,6 +874,19 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error fetching GPU info:', error);
         });
 });
+
+// Add the stylesheet
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+    #models-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 2rem;
+        padding: 1rem;
+    }
+`;
+document.head.appendChild(styleSheet);
+
 
 
 </script>
