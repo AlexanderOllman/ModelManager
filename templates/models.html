@@ -139,7 +139,23 @@ function showCopySuccess(text) {
     }, 2000);
 }
 
-// Main Card Creation Function
+function getFrameworkType(modelName) {
+    if (!modelName) return 'custom';
+    const prefix = modelName.toLowerCase().split('-')[0];
+    if (prefix === 'nvidia') return 'nvidia';
+    if (prefix === 'vllm') return 'vllm';
+    return 'custom';
+}
+
+function getFrameworkLabel(type) {
+    switch(type) {
+        case 'nvidia': return 'NVIDIA';
+        case 'vllm': return 'vLLM';
+        default: return 'Custom';
+    }
+}
+
+
 function createModelCards(data) {
     const container = document.getElementById('models-container');
     container.innerHTML = '';
@@ -155,12 +171,17 @@ function createModelCards(data) {
         const url = safeGet(item, 'status.url');
         const resources = safeGet(item, 'spec.predictor.model.resources.limits', {});
         const modelName = safeGet(item, 'metadata.name');
+        const frameworkType = getFrameworkType(modelName);
         
         const card = document.createElement('div');
         card.className = 'model-card';
         card.dataset.url = url;
         
         card.innerHTML = `
+            <button class="delete-btn" aria-label="Delete model">
+                <i class="fas fa-times"></i>
+            </button>
+            
             <div class="status-badge ${isReady ? 'ready' : 'not-ready'}">
                 ${isReady ? 'Ready' : 'Not Ready'}
             </div>
@@ -187,8 +208,8 @@ function createModelCards(data) {
                 ${url || 'N/A'}
             </div>
             
-            <div class="framework-tag">
-                ${getFrameworkTag(item)}
+            <div class="framework-tag ${frameworkType}">
+                ${getFrameworkLabel(frameworkType)}
             </div>
 
             <div class="resources-info">
@@ -200,7 +221,6 @@ function createModelCards(data) {
             </div>
         `;
 
-        applyFrameworkStyles(card, modelName);
         container.appendChild(card);
     });
 }

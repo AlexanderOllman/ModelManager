@@ -61,32 +61,76 @@
 
 {% block scripts %}
 <script>
-    function createModelCards(data) {
-        const container = document.getElementById('models-container');
-        container.innerHTML = '';
-        if (data.length === 0) {
-            container.innerHTML = '<p>No models found.</p>';
-            return;
-        }
-        data.forEach(item => {
-            const card = document.createElement('div');
-            card.innerHTML = `
-                <div class="card model-card">
-                    <div class="tag">
-                        <span>Downloaded</span>
-                    </div>
-                    <div class="publication-date">
-                        <span>Location: /mnt/models/hub</span>
-                    </div>
-                    <h1>${item.repo_name}</h1>
-                    <div class="repo-info">
-                        <span class="full-repo-path">${item.full_repo}</span>
-                    </div>
-                </div>
-            `;
-            container.appendChild(card);
-        });
+function createModelCards(data) {
+    const container = document.getElementById('models-container');
+    container.innerHTML = '';
+    if (data.length === 0) {
+        container.innerHTML = '<p>No models found.</p>';
+        return;
     }
+    
+    data.forEach(item => {
+        const frameworkType = getFrameworkType(item.repo_name);
+        
+        const card = document.createElement('div');
+        card.className = 'model-card';
+        
+        card.innerHTML = `
+            <button class="delete-btn" data-model="${item.full_repo}" aria-label="Delete model">
+                <i class="fas fa-times"></i>
+            </button>
+            
+            <div class="tag">
+                <span>Downloaded</span>
+            </div>
+            
+            <div class="deployment-date">
+                <span>Location: /mnt/models/hub</span>
+            </div>
+            
+            <h1>${item.repo_name}</h1>
+            
+            <div class="repo-info">
+                <span class="full-repo-path">${item.full_repo}</span>
+            </div>
+            
+            <div class="framework-tag ${frameworkType}">
+                ${getFrameworkLabel(frameworkType)}
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+
+    // Add delete event listeners
+    document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent card click event
+            const modelRepo = e.currentTarget.dataset.model;
+            if (confirm(`Are you sure you want to delete ${modelRepo}? This will remove all model files from disk.`)) {
+                deleteModelFiles(modelRepo);
+            }
+        });
+    });
+}
+
+function deleteModelFiles(modelRepo) {
+    fetch(`/api/delete-model-files?repo=${encodeURIComponent(modelRepo)}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            fetchModels(); // Refresh the list
+        } else {
+            alert('Failed to delete model: ' + result.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while deleting the model');
+    });
+}
 
     function filterModels() {
         const searchTerm = document.getElementById('modelSearch').value.toLowerCase();

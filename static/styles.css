@@ -248,18 +248,53 @@ body {
     flex-direction: column;
     cursor: pointer;
     position: relative;
-    transition: all 0.15s ease-in-out;
+    transition: box-shadow 0.15s ease-in-out, transform 0.15s ease-in-out;
     box-shadow: var(--push) var(--push) 0 0 black;
     will-change: box-shadow, transform;
 }
 
-/* Framework-specific card styles */
-.model-card.nvidia-card {
-    background-color: rgba(118, 185, 0, 0.5) !important;
+/* Framework Tag Styles */
+.model-card .framework-tag {
+    position: absolute;
+    bottom: 1rem;
+    left: 1rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
-.model-card.vllm-card {
-    background-color: rgba(48, 162, 255, 0.5) !important;
+.framework-tag.nvidia {
+    background-color: #76B900;
+    color: #FFFFFF;
+}
+
+.framework-tag.vllm {
+    background-color: #fcb516;
+    color: #FFFFFF;
+}
+
+.framework-tag.custom {
+    background-color: #6c757d;
+    color: #FFFFFF;
+}
+
+/* Delete Button */
+.model-card .delete-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: #6c757d;
+    padding: 0.5rem;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.model-card .delete-btn:hover {
+    color: #dc3545;
 }
 
 .model-card:active {
