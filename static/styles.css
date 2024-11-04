@@ -1,3 +1,150 @@
+/* Font Declarations */
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Regular.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Regular.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-RegularItalic.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-RegularItalic.woff') format('woff');
+    font-weight: 400;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Light.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Light.woff') format('woff');
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-LightItalic.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-LightItalic.woff') format('woff');
+    font-weight: 300;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Medium.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Medium.woff') format('woff');
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-MediumItalic.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-MediumItalic.woff') format('woff');
+    font-weight: 500;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Semibold.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Semibold.woff') format('woff');
+    font-weight: 600;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-SemiboldItalic.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-SemiboldItalic.woff') format('woff');
+    font-weight: 600;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Bold.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Bold.woff') format('woff');
+    font-weight: 700;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-BoldItalic.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-BoldItalic.woff') format('woff');
+    font-weight: 700;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Black.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Black.woff') format('woff');
+    font-weight: 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-BlackItalic.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-BlackItalic.woff') format('woff');
+    font-weight: 900;
+    font-style: italic;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Thin.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-Thin.woff') format('woff');
+    font-weight: 100;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'MetricHPE';
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-ThinItalic.eot');
+    src: url('/static/fonts/MetricHPE/MetricHPE-Web-ThinItalic.woff') format('woff');
+    font-weight: 100;
+    font-style: italic;
+}
+
+/* Apply font family to all elements */
+* {
+    font-family: 'MetricHPE', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Font weight utility classes */
+.font-thin {
+    font-weight: 100;
+}
+
+.font-light {
+    font-weight: 300;
+}
+
+.font-regular {
+    font-weight: 400;
+}
+
+.font-medium {
+    font-weight: 500;
+}
+
+.font-semibold {
+    font-weight: 600;
+}
+
+.font-bold {
+    font-weight: 700;
+}
+
+.font-black {
+    font-weight: 900;
+}
+
 /* Base Layout Styles */
 body {
     padding-top: 56px;
