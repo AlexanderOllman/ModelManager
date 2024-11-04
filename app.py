@@ -263,7 +263,7 @@ def generate_nvidia_manifest(data):
                         "limits": {
                             "cpu": f"{data['resources']['cpu']}",
                             "memory": f"{data['resources']['memory']}",
-                            "nvidia.com/gpu": f"{str(data['resources']['gpu']}"
+                            "nvidia.com/gpu": f"{data['resources']['gpu']}"
                         },
                         "requests": {
                             "cpu": f"{data['resources']['cpu']}",
