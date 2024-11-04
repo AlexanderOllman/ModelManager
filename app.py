@@ -646,6 +646,11 @@ from pathlib import Path
 
 # Add this to your existing routes
 
+import os
+import shutil
+from flask import jsonify, request
+from pathlib import Path
+
 @app.route('/api/delete-model-files', methods=['DELETE'])
 def delete_model_files():
     try:
@@ -653,12 +658,17 @@ def delete_model_files():
         if not repo:
             return jsonify({'success': False, 'error': 'No repository specified'}), 400
 
-        # Sanitize repo name to prevent directory traversal
-        repo = repo.replace('..', '').replace('/', '_').replace('\\', '_')
+        # Convert repo/model format to directory format
+        # e.g., 'roneneldan/TinyStories-1M' -> 'models--roneneldan--TinyStories-1M'
+        repo_parts = repo.split('/')
+        if len(repo_parts) != 2:
+            return jsonify({'success': False, 'error': 'Invalid repository format'}), 400
+
+        dir_name = f"models--{repo_parts[0]}--{repo_parts[1]}"
         
-        # Base path for models - update this to match your environment
+        # Base path for models
         models_base_path = '/mnt/models/hub'
-        model_path = os.path.join(models_base_path, repo)
+        model_path = os.path.join(models_base_path, dir_name)
 
         if not os.path.exists(model_path):
             return jsonify({'success': False, 'error': 'Model directory not found'}), 404
@@ -669,6 +679,9 @@ def delete_model_files():
 
         # Delete the directory and all its contents
         shutil.rmtree(model_path)
+
+        # Log the deletion
+        app.logger.info(f"Deleted model directory: {dir_name}")
 
         return jsonify({
             'success': True,
@@ -681,7 +694,7 @@ def delete_model_files():
             'success': False,
             'error': f'Error deleting model files: {str(e)}'
         }), 500
-
+    
 @app.route('/api/delete/<resource_type>/<resource_name>', methods=['DELETE'])
 def delete_resource(resource_type, resource_name):
     namespace = request.args.get('namespace')
