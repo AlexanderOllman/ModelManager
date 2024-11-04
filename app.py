@@ -639,6 +639,49 @@ def describe_resource(resource_type, resource_name):
         
     return jsonify({'description': description})
 
+import os
+import shutil
+from flask import jsonify, request
+from pathlib import Path
+
+# Add this to your existing routes
+
+@app.route('/api/delete-model-files', methods=['DELETE'])
+def delete_model_files():
+    try:
+        repo = request.args.get('repo')
+        if not repo:
+            return jsonify({'success': False, 'error': 'No repository specified'}), 400
+
+        # Sanitize repo name to prevent directory traversal
+        repo = repo.replace('..', '').replace('/', '_').replace('\\', '_')
+        
+        # Base path for models - update this to match your environment
+        models_base_path = '/mnt/models/hub'
+        model_path = os.path.join(models_base_path, repo)
+
+        if not os.path.exists(model_path):
+            return jsonify({'success': False, 'error': 'Model directory not found'}), 404
+
+        # Safety check to ensure we're only deleting within the models directory
+        if not Path(model_path).resolve().is_relative_to(Path(models_base_path).resolve()):
+            return jsonify({'success': False, 'error': 'Invalid model path'}), 400
+
+        # Delete the directory and all its contents
+        shutil.rmtree(model_path)
+
+        return jsonify({
+            'success': True,
+            'message': f'Successfully deleted model files for {repo}'
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error deleting model files: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Error deleting model files: {str(e)}'
+        }), 500
+
 @app.route('/api/delete/<resource_type>/<resource_name>', methods=['DELETE'])
 def delete_resource(resource_type, resource_name):
     namespace = request.args.get('namespace')
@@ -677,6 +720,8 @@ def download_model():
         logger.error("Could not create models directory")
         return Response("data: Error: Could not create models directory\n\n", 
                        mimetype='text/event-stream')
+
+
 
     @stream_with_context
     def generate():
