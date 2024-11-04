@@ -175,7 +175,7 @@ def generate_vllm_manifest(data):
                         "--port",
                         "8080",
                         "--model",
-                        data['model']
+                        f"{data['model']}"
                     ],
                     "command": [
                         "python3",
@@ -216,14 +216,14 @@ def generate_vllm_manifest(data):
                     },
                     "resources": {
                         "limits": {
-                            "cpu": str(data['resources']['cpu']),
-                            "memory": str(data['resources']['memory']),
-                            "nvidia.com/gpu": str(data['resources']['gpu'])
+                            "cpu": f"{str(data['resources']['cpu'])}",
+                            "memory": f"{str(data['resources']['memory'])}",
+                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
                         },
                         "requests": {
-                            "cpu": str(data['resources']['cpu']),
-                            "memory": str(data['resources']['memory']),
-                            "nvidia.com/gpu": str(data['resources']['gpu'])
+                            "cpu": f"{str(data['resources']['cpu'])}",
+                            "memory": f"{str(data['resources']['memory'])}",
+                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
                         }
                     },
                     "volumeMounts": [{
@@ -234,7 +234,7 @@ def generate_vllm_manifest(data):
                 "volumes": [{
                     "name": "model-pvc",
                     "persistentVolumeClaim": {
-                        "claimName": data['storageUri']
+                        "claimName": f"{data['storageUri']}"
                     }
                 }]
             }
@@ -247,7 +247,7 @@ def generate_nvidia_manifest(data):
         "apiVersion": "serving.kserve.io/v1beta1",
         "kind": "InferenceService",
         "metadata": {
-            "name": data['modelName'],
+            "name": f"{data['modelName']}",
             "annotations": {
                 "autoscaling.knative.dev/target": "10"
             }
@@ -261,18 +261,18 @@ def generate_nvidia_manifest(data):
                     },
                     "resources": {
                         "limits": {
-                            "cpu": str(data['resources']['cpu']),
-                            "memory": str(data['resources']['memory']),
-                            "nvidia.com/gpu": str(data['resources']['gpu'])
+                            "cpu": f"{str(data['resources']['cpu'])}",
+                            "memory": f"{str(data['resources']['memory'])}",
+                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
                         },
                         "requests": {
-                            "cpu": str(data['resources']['cpu']),
-                            "memory": str(data['resources']['memory']),
-                            "nvidia.com/gpu": str(data['resources']['gpu'])
+                            "cpu": f"{str(data['resources']['cpu'])}",
+                            "memory": f"{str(data['resources']['memory'])}",
+                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
                         }
                     },
                     "runtime": f"nvidia-nim-{data['modelName']}-runtime",
-                    "storageUri": data['storageUri']
+                    "storageUri": f"{data['storageUri']}"
                 }
             }
         }
@@ -297,16 +297,16 @@ def generate_nvidia_manifest(data):
                     "name": "NIM_CACHE_PATH",
                     "value": "/mnt/models"
                 }],
-                "image": data['containerImage'],
+                "image": f"{data['containerImage']}",
                 "name": "kserve-container",
                 "resources": {
                     "limits": {
-                        "cpu": str(data['resources']['cpu']),
-                        "memory": str(data['resources']['memory'])
+                        "cpu": f"{str(data['resources']['cpu'])}",
+                        "memory": f"{str(data['resources']['memory'])}",
                     },
                     "requests": {
-                        "cpu": str(int(float(data['resources']['cpu']) // 2)),
-                        "memory": str(data['resources']['memory'])
+                        "cpu": f"{str(int(float(data['resources']['cpu']) // 2))}",
+                        "memory": f"{str(data['resources']['memory'])}"
                     }
                 }
             }],
