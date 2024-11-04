@@ -216,14 +216,14 @@ def generate_vllm_manifest(data):
                     },
                     "resources": {
                         "limits": {
-                            "cpu": f"{str(data['resources']['cpu'])}",
-                            "memory": f"{str(data['resources']['memory'])}",
-                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
+                            "cpu": f"{data['resources']['cpu']}",
+                            "memory": f"{data['resources']['memory']}",
+                            "nvidia.com/gpu": f"{data['resources']['gpu']}"
                         },
                         "requests": {
-                            "cpu": f"{str(data['resources']['cpu'])}",
-                            "memory": f"{str(data['resources']['memory'])}",
-                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
+                            "cpu": f"{data['resources']['cpu']}",
+                            "memory": f"{data['resources']['memory']}",
+                            "nvidia.com/gpu": f"{data['resources']['gpu']}"
                         }
                     },
                     "volumeMounts": [{
@@ -261,14 +261,14 @@ def generate_nvidia_manifest(data):
                     },
                     "resources": {
                         "limits": {
-                            "cpu": f"{str(data['resources']['cpu'])}",
-                            "memory": f"{str(data['resources']['memory'])}",
-                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
+                            "cpu": f"{data['resources']['cpu']}",
+                            "memory": f"{data['resources']['memory']}",
+                            "nvidia.com/gpu": f"{str(data['resources']['gpu']}"
                         },
                         "requests": {
-                            "cpu": f"{str(data['resources']['cpu'])}",
-                            "memory": f"{str(data['resources']['memory'])}",
-                            "nvidia.com/gpu": f"{str(data['resources']['gpu'])}"
+                            "cpu": f"{data['resources']['cpu']}",
+                            "memory": f"{data['resources']['memory']}",
+                            "nvidia.com/gpu": f"{data['resources']['gpu']}"
                         }
                     },
                     "runtime": f"nvidia-nim-{data['modelName']}-runtime",
@@ -301,12 +301,12 @@ def generate_nvidia_manifest(data):
                 "name": "kserve-container",
                 "resources": {
                     "limits": {
-                        "cpu": f"{str(data['resources']['cpu'])}",
-                        "memory": f"{str(data['resources']['memory'])}",
+                        "cpu": f"{data['resources']['cpu']}",
+                        "memory": f"{data['resources']['memory']}",
                     },
                     "requests": {
-                        "cpu": f"{str(int(float(data['resources']['cpu']) // 2))}",
-                        "memory": f"{str(data['resources']['memory'])}"
+                        "cpu": f"{int(float(data['resources']['cpu']) // 2)}",
+                        "memory": f"{data['resources']['memory']}"
                     }
                 }
             }],
