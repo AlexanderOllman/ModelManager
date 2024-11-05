@@ -284,6 +284,10 @@ def validate_manifest_data(data, required_fields):
     if missing_fields:
         raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
 
+def format_quoted_value(value):
+    """Helper function to format values with quotes."""
+    return f'"{value}"'
+
 def validate_resources(resources):
     """Validate resource requirements and ensure proper formatting."""
     required_fields = ['cpu', 'memory', 'gpu']
@@ -307,12 +311,19 @@ def validate_resources(resources):
             raise ValueError("GPU must be a valid integer")
 
         return {
-            'cpu': f"\"{cpu}\"",
-            'memory': f"\"{memory}\"",
-            'nvidia.com/gpu': f"\"{gpu}\""
+            'cpu': format_quoted_value(cpu),
+            'memory': format_quoted_value(memory),
+            'nvidia.com/gpu': format_quoted_value(gpu)
         }
     except Exception as e:
         raise ValueError(f"Invalid resource format: {str(e)}")
+
+def calculate_request_cpu(limits_cpu_str):
+    """Calculate request CPU from limits CPU."""
+    # Remove quotes if present
+    limits_cpu = float(limits_cpu_str.strip('"').strip("'"))
+    request_cpu = max(1, int(limits_cpu // 2))
+    return format_quoted_value(str(request_cpu))
 
 def generate_vllm_manifest(data):
     """Generate vLLM manifest with validated data and correct string formatting."""
@@ -321,6 +332,7 @@ def generate_vllm_manifest(data):
     
     try:
         resources = validate_resources(data['resources'])
+        request_cpu = calculate_request_cpu(resources['cpu'])
         
         manifest = {
             "apiVersion": "serving.kserve.io/v1beta1",
@@ -412,7 +424,7 @@ def generate_vllm_manifest(data):
                                     "nvidia.com/gpu": resources["nvidia.com/gpu"]
                                 },
                                 "requests": {
-                                    "cpu": f"\"{str(max(1, int(float(resources['cpu'].strip('\"')) // 2)))}\"",
+                                    "cpu": request_cpu,
                                     "memory": resources["memory"],
                                     "nvidia.com/gpu": resources["nvidia.com/gpu"]
                                 }
@@ -448,6 +460,7 @@ def generate_nvidia_manifest(data):
     
     try:
         resources = validate_resources(data['resources'])
+        request_cpu = calculate_request_cpu(resources['cpu'])
         
         inference_yaml = {
             "apiVersion": "serving.kserve.io/v1beta1",
@@ -477,7 +490,7 @@ def generate_nvidia_manifest(data):
                                 "nvidia.com/gpu": resources["nvidia.com/gpu"]
                             },
                             "requests": {
-                                "cpu": f"\"{str(max(1, int(float(resources['cpu'].strip('\"')) // 2)))}\"",
+                                "cpu": request_cpu,
                                 "memory": resources["memory"],
                                 "nvidia.com/gpu": resources["nvidia.com/gpu"]
                             }
@@ -519,7 +532,7 @@ def generate_nvidia_manifest(data):
                                 "memory": resources["memory"]
                             },
                             "requests": {
-                                "cpu": f"\"{str(max(1, int(float(resources['cpu'].strip('\"')) // 2)))}\"",
+                                "cpu": request_cpu,
                                 "memory": resources["memory"]
                             }
                         }
@@ -538,7 +551,8 @@ def generate_nvidia_manifest(data):
         return inference_yaml, runtime_yaml
     except Exception as e:
         raise ValueError(f"Error generating NVIDIA manifest: {str(e)}")
-
+    
+    
 # Update the deployment routes to use the new YAML dumper
 @app.route('/api/deploy-vllm', methods=['POST'])
 def deploy_vllm():
