@@ -11,7 +11,6 @@ from huggingface_hub import snapshot_download, logging as hf_logging, HfApi
 import sys
 import contextlib
 import io
-import math
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -152,7 +151,7 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
     deployment_in_progress = False
     return False
 
-def create_vllm_manifest(model_config):
+def generate_vllm_manifest(model_config):
     deployment_name = model_config['modelName'].lower()
     model_name = model_config['model']
     resources = model_config['resources']
