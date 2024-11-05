@@ -267,26 +267,29 @@ def validate_resources(resources: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
     if not isinstance(resources, dict):
         raise ValueError("Resources must be a dictionary")
 
+    # Validate required fields
     required_fields = ['cpu', 'memory', 'gpu']
     for field in required_fields:
         if field not in resources:
             raise ValueError(f"Missing required resource field: {field}")
 
     # Format resources with proper string values
+    # Note: CPU can be in millicores (e.g., "100m") or cores (e.g., "0.1")
     formatted_resources = {
         "limits": {
             "cpu": str(resources['cpu']),
-            "memory": f"{resources['memory']}Gi",
+            "memory": str(resources['memory']) if "Gi" in str(resources['memory']) else f"{str(resources['memory'])}Gi",
             "nvidia.com/gpu": str(resources['gpu'])
         },
         "requests": {
             "cpu": str(resources['cpu']),
-            "memory": f"{resources['memory']}Gi",
+            "memory": str(resources['memory']) if "Gi" in str(resources['memory']) else f"{str(resources['memory'])}Gi",
             "nvidia.com/gpu": str(resources['gpu'])
         }
     }
 
     return formatted_resources
+
 
 def generate_nvidia_manifest(
     model_name: str,
@@ -399,39 +402,46 @@ def deploy_model():
         except ValueError as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
 
-        # Create temporary file for manifest
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml') as tmp_file:
-            yaml.safe_dump(manifest, tmp_file, default_flow_style=False)
-            tmp_file.flush()
+        # Save manifest to file
+        manifest_path = f"{data['modelName']}-manifest.yaml"
+        with open(manifest_path, 'w') as f:
+            yaml.dump(manifest, f, default_flow_style=False)
 
-            # Apply manifest using kubectl
-            try:
-                namespace = data['namespace']
-                cmd = ['kubectl', 'apply', '-f', tmp_file.name, '-n', namespace]
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                
-                current_app.logger.info(f"Deployment successful: {result.stdout}")
-                socketio.emit('deployment_status', {
-                    'status': 'success',
-                    'message': f"Successfully deployed {data['modelName']}",
-                    'final': True
-                })
-                
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Model deployment initiated',
-                    'manifest': manifest
-                })
+        # Apply manifest using kubectl
+        try:
+            namespace = data['namespace']
+            cmd = ['kubectl', 'apply', '-f', manifest_path, '-n', namespace]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Clean up manifest file
+            os.remove(manifest_path)
+            
+            current_app.logger.info(f"Deployment successful: {result.stdout}")
+            socketio.emit('deployment_status', {
+                'status': 'success',
+                'message': f"Successfully deployed {data['modelName']}",
+                'final': True
+            })
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Model deployment initiated',
+                'manifest': manifest
+            })
 
-            except subprocess.CalledProcessError as e:
-                error_msg = f"Deployment failed: {e.stderr}"
-                current_app.logger.error(error_msg)
-                socketio.emit('deployment_status', {
-                    'status': 'error',
-                    'message': error_msg,
-                    'final': True
-                })
-                return jsonify({'status': 'error', 'message': error_msg}), 500
+        except subprocess.CalledProcessError as e:
+            # Clean up manifest file in case of error
+            if os.path.exists(manifest_path):
+                os.remove(manifest_path)
+                
+            error_msg = f"Deployment failed: {e.stderr}"
+            current_app.logger.error(error_msg)
+            socketio.emit('deployment_status', {
+                'status': 'error',
+                'message': error_msg,
+                'final': True
+            })
+            return jsonify({'status': 'error', 'message': error_msg}), 500
 
     except Exception as e:
         error_msg = f"Unexpected error during deployment: {str(e)}"
@@ -471,39 +481,46 @@ def deploy_vllm():
         except ValueError as e:
             return jsonify({'status': 'error', 'message': str(e)}), 400
 
-        # Create temporary file for manifest
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml') as tmp_file:
-            yaml.safe_dump(manifest, tmp_file, default_flow_style=False)
-            tmp_file.flush()
+        # Save manifest to file
+        manifest_path = f"{data['modelName']}-manifest.yaml"
+        with open(manifest_path, 'w') as f:
+            yaml.dump(manifest, f, default_flow_style=False)
 
-            # Apply manifest using kubectl
-            try:
-                namespace = data['namespace']
-                cmd = ['kubectl', 'apply', '-f', tmp_file.name, '-n', namespace]
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                
-                current_app.logger.info(f"Deployment successful: {result.stdout}")
-                socketio.emit('deployment_status', {
-                    'status': 'success',
-                    'message': f"Successfully deployed {data['modelName']}",
-                    'final': True
-                })
-                
-                return jsonify({
-                    'status': 'success',
-                    'message': 'Model deployment initiated',
-                    'manifest': manifest
-                })
+        # Apply manifest using kubectl
+        try:
+            namespace = data['namespace']
+            cmd = ['kubectl', 'apply', '-f', manifest_path, '-n', namespace]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Clean up manifest file
+            os.remove(manifest_path)
+            
+            current_app.logger.info(f"Deployment successful: {result.stdout}")
+            socketio.emit('deployment_status', {
+                'status': 'success',
+                'message': f"Successfully deployed {data['modelName']}",
+                'final': True
+            })
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Model deployment initiated',
+                'manifest': manifest
+            })
 
-            except subprocess.CalledProcessError as e:
-                error_msg = f"Deployment failed: {e.stderr}"
-                current_app.logger.error(error_msg)
-                socketio.emit('deployment_status', {
-                    'status': 'error',
-                    'message': error_msg,
-                    'final': True
-                })
-                return jsonify({'status': 'error', 'message': error_msg}), 500
+        except subprocess.CalledProcessError as e:
+            # Clean up manifest file in case of error
+            if os.path.exists(manifest_path):
+                os.remove(manifest_path)
+                
+            error_msg = f"Deployment failed: {e.stderr}"
+            current_app.logger.error(error_msg)
+            socketio.emit('deployment_status', {
+                'status': 'error',
+                'message': error_msg,
+                'final': True
+            })
+            return jsonify({'status': 'error', 'message': error_msg}), 500
 
     except Exception as e:
         error_msg = f"Unexpected error during deployment: {str(e)}"
@@ -514,7 +531,7 @@ def deploy_vllm():
             'final': True
         })
         return jsonify({'status': 'error', 'message': error_msg}), 500
-    
+
 @app.route('/api/pod-logs/<namespace>/<pod_name>')
 def get_pod_logs(namespace, pod_name):
     command = f"kubectl logs -n {namespace} {pod_name}"
