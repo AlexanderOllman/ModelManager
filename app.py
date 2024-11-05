@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, Response, stream_with_context, current_app
+from flask import Flask, render_template, jsonify, request, Response, stream_with_context
 import subprocess
 import json
 import yaml
@@ -15,12 +15,6 @@ from typing import Dict, Any
 from kubernetes import client
 import yaml
 
-import tempfile
-
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
-import subprocess
-from pathlib import Path
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -161,6 +155,128 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
     deployment_in_progress = False
     return False
 
+def validate_resources(resources: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
+    """Validate and format resource requirements."""
+    if not isinstance(resources, dict):
+        raise ValueError("Resources must be a dictionary")
+
+    required_fields = ['cpu', 'memory', 'gpu']
+    for field in required_fields:
+        if field not in resources:
+            raise ValueError(f"Missing required resource field: {field}")
+
+    # Format resources with proper string values
+    formatted_resources = {
+        "limits": {
+            "cpu": str(resources['cpu']),
+            "memory": f"{resources['memory']}Gi",
+            "nvidia.com/gpu": str(resources['gpu'])
+        },
+        "requests": {
+            "cpu": str(resources['cpu']),
+            "memory": f"{resources['memory']}Gi",
+            "nvidia.com/gpu": str(resources['gpu'])
+        }
+    }
+
+    return formatted_resources
+
+def generate_nvidia_manifest(
+    model_name: str,
+    resources: Dict[str, Any],
+    storage_uri: str = "pvc://models-pvc"
+) -> Dict[str, Any]:
+    """Generate manifest for NVIDIA NIM models."""
+    if not model_name or not isinstance(model_name, str):
+        raise ValueError("Invalid model name")
+    
+    if not storage_uri or not isinstance(storage_uri, str):
+        raise ValueError("Invalid storage URI")
+
+    formatted_resources = validate_resources(resources)
+    
+    manifest = {
+        "apiVersion": "serving.kserve.io/v1beta1",
+        "kind": "InferenceService",
+        "metadata": {
+            "name": model_name,
+            "annotations": {
+                "autoscaling.knative.dev/target": "10"
+            }
+        },
+        "spec": {
+            "predictor": {
+                "minReplicas": 1,
+                "model": {
+                    "modelFormat": {
+                        "name": f"nvidia-nim-{model_name}"
+                    },
+                    "resources": formatted_resources,
+                    "runtime": f"nvidia-nim-{model_name}-runtime",
+                    "storageUri": storage_uri
+                }
+            }
+        }
+    }
+
+    # Validate the manifest structure
+    try:
+        yaml.safe_dump(manifest, default_flow_style=False)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid manifest structure: {str(e)}")
+
+    return manifest
+
+def generate_vllm_manifest(
+    model_name: str,
+    resources: Dict[str, Any],
+    container_image: str = "vllm/vllm-openai:latest",
+    storage_uri: str = "pvc://models-pvc"
+) -> Dict[str, Any]:
+    """Generate manifest for vLLM models."""
+    if not model_name or not isinstance(model_name, str):
+        raise ValueError("Invalid model name")
+    
+    if not container_image or not isinstance(container_image, str):
+        raise ValueError("Invalid container image")
+    
+    if not storage_uri or not isinstance(storage_uri, str):
+        raise ValueError("Invalid storage URI")
+
+    formatted_resources = validate_resources(resources)
+
+    manifest = {
+        "apiVersion": "serving.kserve.io/v1beta1",
+        "kind": "InferenceService",
+        "metadata": {
+            "name": model_name,
+            "annotations": {
+                "autoscaling.knative.dev/target": "10"
+            }
+        },
+        "spec": {
+            "predictor": {
+                "minReplicas": 1,
+                "model": {
+                    "modelFormat": {
+                        "name": "vllm"
+                    },
+                    "resources": formatted_resources,
+                    "runtime": container_image,
+                    "storageUri": storage_uri
+                }
+            }
+        }
+    }
+
+    # Validate the manifest structure
+    try:
+        yaml.safe_dump(manifest, default_flow_style=False)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid manifest structure: {str(e)}")
+
+    return manifest
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -261,276 +377,193 @@ def get_gpu_info():
         logging.error(f"Raw GPU info data: {gpu_info_data}")
         return jsonify([])
 
-
-def validate_resources(resources: Dict[str, Any]) -> Dict[str, Dict[str, str]]:
-    """Validate and format resource requirements."""
-    if not isinstance(resources, dict):
-        raise ValueError("Resources must be a dictionary")
-
-    # Validate required fields
-    required_fields = ['cpu', 'memory', 'gpu']
-    for field in required_fields:
-        if field not in resources:
-            raise ValueError(f"Missing required resource field: {field}")
-
-    # Format resources with proper string values
-    # Note: CPU can be in millicores (e.g., "100m") or cores (e.g., "0.1")
-    formatted_resources = {
-        "limits": {
-            "cpu": str(resources['cpu']),
-            "memory": str(resources['memory']) if "Gi" in str(resources['memory']) else f"{str(resources['memory'])}Gi",
-            "nvidia.com/gpu": str(resources['gpu'])
-        },
-        "requests": {
-            "cpu": str(resources['cpu']),
-            "memory": str(resources['memory']) if "Gi" in str(resources['memory']) else f"{str(resources['memory'])}Gi",
-            "nvidia.com/gpu": str(resources['gpu'])
-        }
-    }
-
-    return formatted_resources
-
-
-def generate_nvidia_manifest(
-    model_name: str,
-    resources: Dict[str, Any],
-    storage_uri: str = "pvc://models-pvc"
-) -> Dict[str, Any]:
-    """Generate manifest for NVIDIA NIM models."""
-    if not model_name or not isinstance(model_name, str):
-        raise ValueError("Invalid model name")
-    
-    if not storage_uri or not isinstance(storage_uri, str):
-        raise ValueError("Invalid storage URI")
-
-    formatted_resources = validate_resources(resources)
-    
-    manifest = {
-        "apiVersion": "serving.kserve.io/v1beta1",
-        "kind": "InferenceService",
-        "metadata": {
-            "name": model_name,
-            "annotations": {
-                "autoscaling.knative.dev/target": "10"
-            }
-        },
-        "spec": {
-            "predictor": {
-                "minReplicas": 1,
-                "model": {
-                    "modelFormat": {
-                        "name": f"nvidia-nim-{model_name}"
-                    },
-                    "resources": formatted_resources,
-                    "runtime": f"nvidia-nim-{model_name}-runtime",
-                    "storageUri": storage_uri
-                }
-            }
-        }
-    }
-
-    return manifest
-
-def generate_vllm_manifest(
-    model_name: str,
-    resources: Dict[str, Any],
-    container_image: str = "vllm/vllm-openai:latest",
-    storage_uri: str = "pvc://models-pvc"
-) -> Dict[str, Any]:
-    """Generate manifest for vLLM models."""
-    if not model_name or not isinstance(model_name, str):
-        raise ValueError("Invalid model name")
-    
-    if not container_image or not isinstance(container_image, str):
-        raise ValueError("Invalid container image")
-    
-    if not storage_uri or not isinstance(storage_uri, str):
-        raise ValueError("Invalid storage URI")
-
-    formatted_resources = validate_resources(resources)
-
-    manifest = {
-        "apiVersion": "serving.kserve.io/v1beta1",
-        "kind": "InferenceService",
-        "metadata": {
-            "name": model_name,
-            "annotations": {
-                "autoscaling.knative.dev/target": "10"
-            }
-        },
-        "spec": {
-            "predictor": {
-                "minReplicas": 1,
-                "model": {
-                    "modelFormat": {
-                        "name": "vllm"
-                    },
-                    "resources": formatted_resources,
-                    "runtime": container_image,
-                    "storageUri": storage_uri
-                }
-            }
-        }
-    }
-
-    return manifest
-
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
-    """Deploy a NVIDIA NIM model using KServe."""
+    global deployment_in_progress
+    
+    if deployment_in_progress:
+        return jsonify({
+            'status': 'error',
+            'message': 'A deployment is already in progress. Please wait.'
+        })
+    
+    with deployment_lock:
+        if deployment_in_progress:
+            return jsonify({
+                'status': 'error',
+                'message': 'A deployment is already in progress. Please wait.'
+            })
+        deployment_in_progress = True
+    
     try:
-        # Load and validate request data
         data = request.json
-        if not data:
-            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+        namespace = data['namespace']
+        model_name = data['modelName']
+        
+        socketio.emit('deployment_status', {
+            'status': 'info',
+            'message': "Starting deployment process..."
+        })
+        
+        inference_yaml, runtime_yaml = generate_nvidia_manifest(data)
+        
+        # Save YAML files
+        with open('inference.yaml', 'w') as f:
+            yaml.dump(inference_yaml, f)
+        with open('runtime.yaml', 'w') as f:
+            yaml.dump(runtime_yaml, f)
 
-        required_fields = ['modelName', 'namespace', 'resources', 'containerImage', 'storageUri']
-        missing_fields = [field for field in required_fields if field not in data]
-        if missing_fields:
-            return jsonify({
-                'status': 'error',
-                'message': f'Missing required fields: {", ".join(missing_fields)}'
-            }), 400
-
-        # Generate manifest
-        try:
-            manifest = generate_nvidia_manifest(
-                model_name=data['modelName'],
-                resources=data['resources'],
-                storage_uri=data['storageUri']
-            )
-        except ValueError as e:
-            return jsonify({'status': 'error', 'message': str(e)}), 400
-
-        # Save manifest to file
-        manifest_path = f"{data['modelName']}-manifest.yaml"
-        with open(manifest_path, 'w') as f:
-            yaml.dump(manifest, f, default_flow_style=False)
-
-        # Apply manifest using kubectl
-        try:
-            namespace = data['namespace']
-            cmd = ['kubectl', 'apply', '-f', manifest_path, '-n', namespace]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            
-            # Clean up manifest file
-            os.remove(manifest_path)
-            
-            current_app.logger.info(f"Deployment successful: {result.stdout}")
-            socketio.emit('deployment_status', {
-                'status': 'success',
-                'message': f"Successfully deployed {data['modelName']}",
-                'final': True
-            })
-            
-            return jsonify({
-                'status': 'success',
-                'message': 'Model deployment initiated',
-                'manifest': manifest
-            })
-
-        except subprocess.CalledProcessError as e:
-            # Clean up manifest file in case of error
-            if os.path.exists(manifest_path):
-                os.remove(manifest_path)
-                
-            error_msg = f"Deployment failed: {e.stderr}"
-            current_app.logger.error(error_msg)
+        # Apply runtime YAML
+        socketio.emit('deployment_status', {
+            'status': 'info',
+            'message': "Deploying runtime..."
+        })
+        runtime_result, runtime_error = run_kubectl_command(f"kubectl apply -f runtime.yaml")
+        if runtime_error:
             socketio.emit('deployment_status', {
                 'status': 'error',
-                'message': error_msg,
+                'message': f"Failed to deploy runtime: {runtime_error}",
                 'final': True
             })
-            return jsonify({'status': 'error', 'message': error_msg}), 500
+            deployment_in_progress = False
+            return jsonify({'status': 'error', 'message': 'Runtime deployment failed.'})
+
+        # Wait for runtime to be ready
+        time.sleep(15)
+
+        # Apply inference YAML
+        socketio.emit('deployment_status', {
+            'status': 'info',
+            'message': "Deploying inference service..."
+        })
+        inference_result, inference_error = run_kubectl_command(
+            f"kubectl apply -f inference.yaml -n {namespace}"
+        )
+        if inference_error:
+            socketio.emit('deployment_status', {
+                'status': 'error',
+                'message': f"Failed to deploy inference service: {inference_error}",
+                'final': True
+            })
+            deployment_in_progress = False
+            return jsonify({'status': 'error', 'message': 'Inference service deployment failed.'})
+
+        # Start status checking in a separate thread
+        threading.Thread(
+            target=lambda: check_deployment_status(namespace, model_name)
+        ).start()
+
+        return jsonify({'status': 'info', 'message': 'Deployment started. Checking status...'})
 
     except Exception as e:
-        error_msg = f"Unexpected error during deployment: {str(e)}"
-        current_app.logger.error(error_msg)
+        logger.error(f"Error in deployment: {str(e)}")
         socketio.emit('deployment_status', {
             'status': 'error',
-            'message': error_msg,
+            'message': f"Deployment error: {str(e)}",
             'final': True
         })
-        return jsonify({'status': 'error', 'message': error_msg}), 500
+        deployment_in_progress = False
+        return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
+    finally:
+        deployment_in_progress = False
 
 @app.route('/api/deploy-vllm', methods=['POST'])
 def deploy_vllm():
-    """Deploy a vLLM model using KServe."""
+    global deployment_in_progress
+    
+    if deployment_in_progress:
+        return jsonify({
+            'status': 'error',
+            'message': 'A deployment is already in progress. Please wait.'
+        })
+    
+    with deployment_lock:
+        if deployment_in_progress:
+            return jsonify({
+                'status': 'error',
+                'message': 'A deployment is already in progress. Please wait.'
+            })
+        deployment_in_progress = True
+    
     try:
-        # Load and validate request data
         data = request.json
-        if not data:
-            return jsonify({'status': 'error', 'message': 'No data provided'}), 400
+        namespace = data['namespace']
+        model_name = data['modelName']
 
-        required_fields = ['modelName', 'namespace', 'resources', 'containerImage', 'model']
-        missing_fields = [field for field in required_fields if field not in data]
-        if missing_fields:
-            return jsonify({
+        socketio.emit('deployment_status', {
+            'status': 'info',
+            'message': "Starting vLLM deployment process..."
+        })
+
+        # If this is a custom model (not already downloaded)
+        if 'customModel' in data:
+            socketio.emit('deployment_status', {
+                'status': 'info',
+                'message': f"Downloading model {data['model']} from HuggingFace..."
+            })
+            try:
+                result = snapshot_download(
+                    repo_id=data['model'],
+                    cache_dir="/mnt/models/hub",
+                    local_files_only=False,
+                    allow_patterns=["*.safetensors", "*.json"]
+                )
+                socketio.emit('deployment_status', {
+                    'status': 'info',
+                    'message': f"Model downloaded successfully to {result}"
+                })
+            except Exception as e:
+                socketio.emit('deployment_status', {
+                    'status': 'error',
+                    'message': f"Failed to download model: {str(e)}",
+                    'final': True
+                })
+                deployment_in_progress = False
+                return jsonify({'status': 'error', 'message': 'Model download failed'})
+
+        # Generate and apply vLLM manifest
+        manifest = generate_vllm_manifest(data)
+        
+        # Save manifest
+        with open('vllm.yaml', 'w') as f:
+            yaml.dump(manifest, f)
+
+        # Apply manifest
+        socketio.emit('deployment_status', {
+            'status': 'info',
+            'message': "Deploying vLLM service..."
+        })
+        
+        result, error = run_kubectl_command(f"kubectl apply -f vllm.yaml -n {namespace}")
+        if error:
+            socketio.emit('deployment_status', {
                 'status': 'error',
-                'message': f'Missing required fields: {", ".join(missing_fields)}'
-            }), 400
+                'message': f"Failed to deploy vLLM service: {error}",
+                'final': True
+            })
+            deployment_in_progress = False
+            return jsonify({'status': 'error', 'message': 'vLLM service deployment failed'})
 
-        # Generate manifest
-        try:
-            manifest = generate_vllm_manifest(
-                model_name=data['modelName'],
-                resources=data['resources'],
-                container_image=data['containerImage'],
-                storage_uri=data.get('storageUri', 'pvc://models-pvc')
+        # Start status checking in a separate thread
+        threading.Thread(
+            target=lambda: check_deployment_status(
+                namespace, 
+                f"vllm-{model_name}", 
+                framework='vllm'
             )
-        except ValueError as e:
-            return jsonify({'status': 'error', 'message': str(e)}), 400
+        ).start()
 
-        # Save manifest to file
-        manifest_path = f"{data['modelName']}-manifest.yaml"
-        with open(manifest_path, 'w') as f:
-            yaml.dump(manifest, f, default_flow_style=False)
-
-        # Apply manifest using kubectl
-        try:
-            namespace = data['namespace']
-            cmd = ['kubectl', 'apply', '-f', manifest_path, '-n', namespace]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            
-            # Clean up manifest file
-            os.remove(manifest_path)
-            
-            current_app.logger.info(f"Deployment successful: {result.stdout}")
-            socketio.emit('deployment_status', {
-                'status': 'success',
-                'message': f"Successfully deployed {data['modelName']}",
-                'final': True
-            })
-            
-            return jsonify({
-                'status': 'success',
-                'message': 'Model deployment initiated',
-                'manifest': manifest
-            })
-
-        except subprocess.CalledProcessError as e:
-            # Clean up manifest file in case of error
-            if os.path.exists(manifest_path):
-                os.remove(manifest_path)
-                
-            error_msg = f"Deployment failed: {e.stderr}"
-            current_app.logger.error(error_msg)
-            socketio.emit('deployment_status', {
-                'status': 'error',
-                'message': error_msg,
-                'final': True
-            })
-            return jsonify({'status': 'error', 'message': error_msg}), 500
+        return jsonify({'status': 'info', 'message': 'Deployment started. Checking status...'})
 
     except Exception as e:
-        error_msg = f"Unexpected error during deployment: {str(e)}"
-        current_app.logger.error(error_msg)
+        logger.error(f"Error in vLLM deployment: {str(e)}")
         socketio.emit('deployment_status', {
             'status': 'error',
-            'message': error_msg,
+            'message': f"Deployment error: {str(e)}",
             'final': True
         })
-        return jsonify({'status': 'error', 'message': error_msg}), 500
+        deployment_in_progress = False
+        return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
 
 @app.route('/api/pod-logs/<namespace>/<pod_name>')
 def get_pod_logs(namespace, pod_name):
