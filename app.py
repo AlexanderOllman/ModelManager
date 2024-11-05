@@ -49,6 +49,17 @@ class StringIOWithCallback(io.StringIO):
         if s.strip():  # Only send non-empty lines
             self.callback(s.strip())
 
+class NoAliasDumper(yaml.SafeDumper):
+    def ignore_aliases(self, data):
+        return True
+    
+    def represent_str(self, data):
+        if data in ('true', 'false', 'yes', 'no', 'on', 'off', 'null', 'none', 'infinite'):
+            style = "'"  # Use single quotes for these special values
+            return self.represent_scalar('tag:yaml.org,2002:str', data, style=style)
+        return super().represent_str(data)
+
+
 def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
     return result.stdout, result.stderr
@@ -311,22 +322,21 @@ def validate_resources(resources):
             raise ValueError("GPU must be a valid integer")
 
         return {
-            'cpu': format_quoted_value(cpu),
-            'memory': format_quoted_value(memory),
-            'nvidia.com/gpu': format_quoted_value(gpu)
+            'cpu': cpu,
+            'memory': memory,
+            'nvidia.com/gpu': gpu
         }
     except Exception as e:
         raise ValueError(f"Invalid resource format: {str(e)}")
 
 def calculate_request_cpu(limits_cpu_str):
     """Calculate request CPU from limits CPU."""
-    # Remove quotes if present
-    limits_cpu = float(limits_cpu_str.strip('"').strip("'"))
+    limits_cpu = float(limits_cpu_str)
     request_cpu = max(1, int(limits_cpu // 2))
-    return format_quoted_value(str(request_cpu))
+    return str(request_cpu)
 
 def generate_vllm_manifest(data):
-    """Generate vLLM manifest with validated data and correct string formatting."""
+    """Generate vLLM manifest with correct formatting."""
     required_fields = ['modelName', 'model', 'containerImage', 'resources', 'storageUri']
     validate_manifest_data(data, required_fields)
     
@@ -335,113 +345,113 @@ def generate_vllm_manifest(data):
         request_cpu = calculate_request_cpu(resources['cpu'])
         
         manifest = {
-            "apiVersion": "serving.kserve.io/v1beta1",
-            "kind": "InferenceService",
-            "metadata": {
-                "name": f"vllm-{data['modelName']}",
-                "annotations": {
-                    "autoscaling.knative.dev/target": "1",
-                    "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
-                    "autoscaling.knative.dev/minScale": "1",
-                    "autoscaling.knative.dev/maxScale": "1",
-                    "serving.knative.dev/scale-to-zero-grace-period": "infinite",
-                    "serving.kserve.io/enable-auth": "false",
-                    "serving.knative.dev/scaleToZeroPodRetention": "false"
+            'apiVersion': 'serving.kserve.io/v1beta1',
+            'kind': 'InferenceService',
+            'metadata': {
+                'name': f"vllm-{data['modelName']}",
+                'annotations': {
+                    'autoscaling.knative.dev/target': '1',
+                    'autoscaling.knative.dev/class': 'kpa.autoscaling.knative.dev',
+                    'autoscaling.knative.dev/minScale': '1',
+                    'autoscaling.knative.dev/maxScale': '1',
+                    'serving.knative.dev/scale-to-zero-grace-period': 'infinite',
+                    'serving.kserve.io/enable-auth': 'false',
+                    'serving.knative.dev/scaleToZeroPodRetention': 'false'
                 }
             },
-            "spec": {
-                "predictor": {
-                    "containers": [
+            'spec': {
+                'predictor': {
+                    'containers': [
                         {
-                            "name": "kserve-container",
-                            "args": [
-                                "--port",
-                                "8080",
-                                "--model",
+                            'name': 'kserve-container',
+                            'args': [
+                                '--port',
+                                '8080',
+                                '--model',
                                 data['model']
                             ],
-                            "command": [
-                                "python3",
-                                "-m",
-                                "vllm.entrypoints.api_server"
+                            'command': [
+                                'python3',
+                                '-m',
+                                'vllm.entrypoints.api_server'
                             ],
-                            "env": [
+                            'env': [
                                 {
-                                    "name": "HF_HOME",
-                                    "value": "/mnt/models-pvc"
+                                    'name': 'HF_HOME',
+                                    'value': '/mnt/models-pvc'
                                 },
                                 {
-                                    "name": "HF_HUB_CACHE",
-                                    "value": "/mnt/models-pvc/hub"
+                                    'name': 'HF_HUB_CACHE',
+                                    'value': '/mnt/models-pvc/hub'
                                 },
                                 {
-                                    "name": "XDG_CACHE_HOME",
-                                    "value": "/mnt/models-pvc/.cache"
+                                    'name': 'XDG_CACHE_HOME',
+                                    'value': '/mnt/models-pvc/.cache'
                                 },
                                 {
-                                    "name": "XDG_CONFIG_HOME",
-                                    "value": "/mnt/models-pvc/.config"
+                                    'name': 'XDG_CONFIG_HOME',
+                                    'value': '/mnt/models-pvc/.config'
                                 },
                                 {
-                                    "name": "PROTOCOL",
-                                    "value": "v2"
+                                    'name': 'PROTOCOL',
+                                    'value': 'v2'
                                 },
                                 {
-                                    "name": "SCALE_TO_ZERO_ENABLED",
-                                    "value": "false"
+                                    'name': 'SCALE_TO_ZERO_ENABLED',
+                                    'value': 'false'
                                 }
                             ],
-                            "image": data['containerImage'],
-                            "imagePullPolicy": "IfNotPresent",
-                            "ports": [
+                            'image': data['containerImage'],
+                            'imagePullPolicy': 'IfNotPresent',
+                            'ports': [
                                 {
-                                    "containerPort": 8080,
-                                    "protocol": "TCP"
+                                    'containerPort': 8080,
+                                    'protocol': 'TCP'
                                 }
                             ],
-                            "readinessProbe": {
-                                "httpGet": {
-                                    "path": "/health",
-                                    "port": 8080
+                            'readinessProbe': {
+                                'httpGet': {
+                                    'path': '/health',
+                                    'port': 8080
                                 },
-                                "initialDelaySeconds": 60,
-                                "periodSeconds": 10,
-                                "timeoutSeconds": 5
+                                'initialDelaySeconds': 60,
+                                'periodSeconds': 10,
+                                'timeoutSeconds': 5
                             },
-                            "livenessProbe": {
-                                "httpGet": {
-                                    "path": "/health",
-                                    "port": 8080
+                            'livenessProbe': {
+                                'httpGet': {
+                                    'path': '/health',
+                                    'port': 8080
                                 },
-                                "initialDelaySeconds": 60,
-                                "periodSeconds": 10,
-                                "timeoutSeconds": 5
+                                'initialDelaySeconds': 60,
+                                'periodSeconds': 10,
+                                'timeoutSeconds': 5
                             },
-                            "resources": {
-                                "limits": {
-                                    "cpu": resources["cpu"],
-                                    "memory": resources["memory"],
-                                    "nvidia.com/gpu": resources["nvidia.com/gpu"]
+                            'resources': {
+                                'limits': {
+                                    'cpu': resources['cpu'],
+                                    'memory': resources['memory'],
+                                    'nvidia.com/gpu': resources['nvidia.com/gpu']
                                 },
-                                "requests": {
-                                    "cpu": request_cpu,
-                                    "memory": resources["memory"],
-                                    "nvidia.com/gpu": resources["nvidia.com/gpu"]
+                                'requests': {
+                                    'cpu': request_cpu,
+                                    'memory': resources['memory'],
+                                    'nvidia.com/gpu': resources['nvidia.com/gpu']
                                 }
                             },
-                            "volumeMounts": [
+                            'volumeMounts': [
                                 {
-                                    "name": "model-pvc",
-                                    "mountPath": "/mnt/models-pvc"
+                                    'name': 'model-pvc',
+                                    'mountPath': '/mnt/models-pvc'
                                 }
                             ]
                         }
                     ],
-                    "volumes": [
+                    'volumes': [
                         {
-                            "name": "model-pvc",
-                            "persistentVolumeClaim": {
-                                "claimName": data['storageUri']
+                            'name': 'model-pvc',
+                            'persistentVolumeClaim': {
+                                'claimName': data['storageUri']
                             }
                         }
                     ]
@@ -452,6 +462,14 @@ def generate_vllm_manifest(data):
 
     except Exception as e:
         raise ValueError(f"Error generating vLLM manifest: {str(e)}")
+
+
+def calculate_request_cpu(limits_cpu_str):
+    """Calculate request CPU from limits CPU."""
+    # Remove quotes if present
+    limits_cpu = float(limits_cpu_str.strip('"').strip("'"))
+    request_cpu = max(1, int(limits_cpu // 2))
+    return format_quoted_value(str(request_cpu))
 
 def generate_nvidia_manifest(data):
     """Generate NVIDIA manifest with validated data and correct string formatting."""
@@ -552,7 +570,7 @@ def generate_nvidia_manifest(data):
     except Exception as e:
         raise ValueError(f"Error generating NVIDIA manifest: {str(e)}")
     
-    
+
 # Update the deployment routes to use the new YAML dumper
 @app.route('/api/deploy-vllm', methods=['POST'])
 def deploy_vllm():
