@@ -11,7 +11,6 @@ from huggingface_hub import snapshot_download, logging as hf_logging, HfApi
 import sys
 import contextlib
 import io
-import math
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -152,97 +151,96 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
     deployment_in_progress = False
     return False
 
-def generate_vllm_manifest(model_config):
-    deployment_name = model_config['modelName'].lower()
-    model_name = model_config['model']
-    resources = model_config['resources']
-    
-    # Extract and convert resource values
-    cpu_limit = int(resources['cpu'])
-    memory_limit = int(resources['memory'].replace('Gi', ''))
-    gpu_count = int(resources['gpu'])
-    
-    # Set up paths and configurations
-    cache_dir = '/mnt/models'
-    cache_dir_hub = f'{cache_dir}/hub'
-    pvc_name = 'models-pvc'
-    entry_points = 'vllm.entrypoints.openai.api_server'
-
-    manifest = f"""
-apiVersion: serving.kserve.io/v1beta1
-kind: InferenceService
-metadata:
-  name: {deployment_name}
-  annotations:
-    autoscaling.knative.dev/target: "1"
-    autoscaling.knative.dev/class: "kpa.autoscaling.knative.dev"
-    autoscaling.knative.dev/minScale: "1"
-    autoscaling.knative.dev/maxScale: "1"
-    serving.knative.dev/scale-to-zero-grace-period: "infinite"
-    serving.kserve.io/enable-auth: "false"
-    serving.knative.dev/scaleToZeroPodRetention: "false"
-spec:
-  predictor:
-    containers:
-      - name: kserve-container
-        args:
-          - "--port"
-          - "8080"
-          - "--model"
-          - "{model_name}"
-        command:
-          - "python3"
-          - "-m"
-          - "{entry_points}"
-        env:
-          - name: "HF_HOME"
-            value: "{cache_dir}"   
-          - name: "HF_HUB_CACHE"
-            value: "{cache_dir_hub}"     
-          - name: "XDG_CACHE_HOME"
-            value: "{cache_dir + '/.cache'}"    
-          - name: "XDG_CONFIG_HOME"
-            value: "{cache_dir + '/.config'}"
-          - name: "PROTOCOL"
-            value: "v2"
-          - name: "SCALE_TO_ZERO_ENABLED"
-            value: "false"
-        image: vllm/vllm-openai:latest
-        imagePullPolicy: IfNotPresent
-        ports:
-          - containerPort: 8080
-            protocol: TCP
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          timeoutSeconds: 5
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          timeoutSeconds: 5
-        resources:
-          limits:
-            cpu: "{cpu_limit}"
-            memory: "{memory_limit}Gi"
-            nvidia.com/gpu: "{gpu_count}"
-          requests:
-            cpu: "{math.ceil(cpu_limit / 2)}"
-            memory: "{math.ceil(memory_limit / 2)}Gi"
-            nvidia.com/gpu: "{gpu_count}"
-        volumeMounts:
-          - name: model-pvc
-            mountPath: {cache_dir}
-    volumes:
-      - name: model-pvc
-        persistentVolumeClaim:
-          claimName: {pvc_name}
-"""
+def generate_vllm_manifest(data):
+ 
+    manifest = {
+        "apiVersion": "serving.kserve.io/v1beta1",
+        "kind": "InferenceService",
+        "metadata": {
+            "name": f"vllm-{data['modelName']}",
+            "annotations": {
+                "autoscaling.knative.dev/target": "1",
+                "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
+                "autoscaling.knative.dev/minScale": "1",
+                "autoscaling.knative.dev/maxScale": "1",
+                "serving.knative.dev/scale-to-zero-grace-period": "infinite",
+                "serving.kserve.io/enable-auth": "false",
+                "serving.knative.dev/scaleToZeroPodRetention": "false"
+            }
+        },
+        "spec": {
+            "predictor": {
+                "containers": [{
+                    "name": "kserve-container",
+                    "args": [
+                        "--port",
+                        "8080",
+                        "--model",
+                        f"{data['model']}"
+                    ],
+                    "command": [
+                        "python3",
+                        "-m",
+                        "vllm.entrypoints.api_server"
+                    ],
+                    "env": [
+                        {"name": "HF_HOME", "value": "/mnt/models"},
+                        {"name": "HF_HUB_CACHE", "value": "/mnt/models/hub"},
+                        {"name": "XDG_CACHE_HOME", "value": "/mnt/models/.cache"},
+                        {"name": "XDG_CONFIG_HOME", "value": "/mnt/models/.config"},
+                        {"name": "PROTOCOL", "value": "v2"},
+                        {"name": "SCALE_TO_ZERO_ENABLED", "value": "false"}
+                    ],
+                    "image": data['containerImage'],
+                    "imagePullPolicy": "IfNotPresent",
+                    "ports": [{
+                        "containerPort": 8080,
+                        "protocol": "TCP"
+                    }],
+                    "readinessProbe": {
+                        "httpGet": {
+                            "path": "/health",
+                            "port": 8080
+                        },
+                        "initialDelaySeconds": 60,
+                        "periodSeconds": 10,
+                        "timeoutSeconds": 5
+                    },
+                    "livenessProbe": {
+                        "httpGet": {
+                            "path": "/health",
+                            "port": 8080
+                        },
+                        "initialDelaySeconds": 60,
+                        "periodSeconds": 10,
+                        "timeoutSeconds": 5
+                    },
+                    "resources": {
+                        "limits": {
+                            "cpu": f"{data['resources']['cpu']}",
+                            "memory": f"{data['resources']['memory']}",
+                            "nvidia.com/gpu": f"{data['resources']['gpu']}"
+                        },
+                        "requests": {
+                            "cpu": f"{data['resources']['cpu']}",
+                            "memory": f"{data['resources']['memory']}",
+                            "nvidia.com/gpu": f"{data['resources']['gpu']}"
+                        }
+                    },
+                    "volumeMounts": [{
+                        "name": "model-pvc",
+                        "mountPath": "/mnt/models"
+                    }]
+                }],
+                "volumes": [{
+                    "name": "model-pvc",
+                    "persistentVolumeClaim": {
+                        "claimName": f"{data['storageUri']}"
+                    }
+                }]
+            }
+        }
+    }
     return manifest
 
 def generate_nvidia_manifest(data):
