@@ -151,211 +151,6 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
     deployment_in_progress = False
     return False
 
-def validate_resources(resources):
-    """Validate resource requirements and ensure proper formatting."""
-    required_fields = ['cpu', 'memory', 'gpu']
-    if not all(field in resources for field in required_fields):
-        raise ValueError("Missing required resource fields. Must specify cpu, memory, and gpu.")
-
-    try:
-        # Validate CPU
-        cpu = str(resources['cpu'])
-        if not (cpu.isdigit() or (cpu.replace('.', '').isdigit() and cpu.count('.') == 1)):
-            raise ValueError("CPU must be a valid number")
-
-        # Validate Memory
-        memory = str(resources['memory'])
-        if not memory.endswith('Gi'):
-            memory = f"{memory}Gi"
-
-        # Validate GPU
-        gpu = str(resources['gpu'])
-        if not gpu.isdigit():
-            raise ValueError("GPU must be a valid integer")
-
-        return {
-            'cpu': cpu,
-            'memory': memory,
-            'nvidia.com/gpu': gpu
-        }
-    except Exception as e:
-        raise ValueError(f"Invalid resource format: {str(e)}")
-
-def validate_manifest_data(data, required_fields):
-    """Validate manifest input data."""
-    missing_fields = [field for field in required_fields if field not in data]
-    if missing_fields:
-        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
-
-def generate_vllm_manifest(data):
-    """Generate vLLM manifest with validated data."""
-    required_fields = ['modelName', 'model', 'containerImage', 'resources', 'storageUri']
-    validate_manifest_data(data, required_fields)
-    
-    try:
-        resources = validate_resources(data['resources'])
-        
-        manifest = {
-            "apiVersion": "serving.kserve.io/v1beta1",
-            "kind": "InferenceService",
-            "metadata": {
-                "name": f"vllm-{data['modelName']}",
-                "annotations": {
-                    "autoscaling.knative.dev/target": "1",
-                    "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
-                    "autoscaling.knative.dev/minScale": "1",
-                    "autoscaling.knative.dev/maxScale": "1",
-                    "serving.knative.dev/scale-to-zero-grace-period": "infinite",
-                    "serving.kserve.io/enable-auth": "false",
-                    "serving.knative.dev/scaleToZeroPodRetention": "false"
-                }
-            },
-            "spec": {
-                "predictor": {
-                    "containers": [{
-                        "name": "kserve-container",
-                        "args": [
-                            "--port", "8080",
-                            "--model", data['model']
-                        ],
-                        "command": [
-                            "python3",
-                            "-m",
-                            "vllm.entrypoints.api_server"
-                        ],
-                        "env": [
-                            {"name": "HF_HOME", "value": "/mnt/models"},
-                            {"name": "HF_HUB_CACHE", "value": "/mnt/models/hub"},
-                            {"name": "XDG_CACHE_HOME", "value": "/mnt/models/.cache"},
-                            {"name": "XDG_CONFIG_HOME", "value": "/mnt/models/.config"},
-                            {"name": "PROTOCOL", "value": "v2"},
-                            {"name": "SCALE_TO_ZERO_ENABLED", "value": "false"}
-                        ],
-                        "image": data['containerImage'],
-                        "imagePullPolicy": "IfNotPresent",
-                        "ports": [{
-                            "containerPort": 8080,
-                            "protocol": "TCP"
-                        }],
-                        "readinessProbe": {
-                            "httpGet": {
-                                "path": "/health",
-                                "port": 8080
-                            },
-                            "initialDelaySeconds": 60,
-                            "periodSeconds": 10,
-                            "timeoutSeconds": 5
-                        },
-                        "livenessProbe": {
-                            "httpGet": {
-                                "path": "/health",
-                                "port": 8080
-                            },
-                            "initialDelaySeconds": 60,
-                            "periodSeconds": 10,
-                            "timeoutSeconds": 5
-                        },
-                        "resources": {
-                            "limits": resources,
-                            "requests": resources
-                        },
-                        "volumeMounts": [{
-                            "name": "model-pvc",
-                            "mountPath": "/mnt/models"
-                        }]
-                    }],
-                    "volumes": [{
-                        "name": "model-pvc",
-                        "persistentVolumeClaim": {
-                            "claimName": str(data['storageUri'])
-                        }
-                    }]
-                }
-            }
-        }
-        return manifest
-    except Exception as e:
-        raise ValueError(f"Error generating vLLM manifest: {str(e)}")
-
-def generate_nvidia_manifest(data):
-    """Generate NVIDIA manifest with validated data."""
-    required_fields = ['modelName', 'containerImage', 'resources', 'storageUri']
-    validate_manifest_data(data, required_fields)
-    
-    try:
-        resources = validate_resources(data['resources'])
-        
-        inference_yaml = {
-            "apiVersion": "serving.kserve.io/v1beta1",
-            "kind": "InferenceService",
-            "metadata": {
-                "name": data['modelName'],
-                "annotations": {
-                    "autoscaling.knative.dev/target": "10"
-                }
-            },
-            "spec": {
-                "predictor": {
-                    "minReplicas": 1,
-                    "model": {
-                        "modelFormat": {
-                            "name": f"nvidia-nim-{data['modelName']}"
-                        },
-                        "resources": {
-                            "limits": resources,
-                            "requests": resources
-                        },
-                        "runtime": f"nvidia-nim-{data['modelName']}-runtime",
-                        "storageUri": str(data['storageUri'])
-                    }
-                }
-            }
-        }
-
-        runtime_yaml = {
-            "apiVersion": "serving.kserve.io/v1alpha1",
-            "kind": "ClusterServingRuntime",
-            "metadata": {
-                "name": f"nvidia-nim-{data['modelName']}-runtime"
-            },
-            "spec": {
-                "annotations": {
-                    "prometheus.kserve.io/path": "/metrics",
-                    "prometheus.kserve.io/port": "8000",
-                    "serving.kserve.io/enable-metric-aggregation": "true",
-                    "serving.kserve.io/enable-prometheus-scraping": "true"
-                },
-                "containers": [{
-                    "args": None,
-                    "env": [{
-                        "name": "NIM_CACHE_PATH",
-                        "value": "/mnt/models"
-                    }],
-                    "image": str(data['containerImage']),
-                    "name": "kserve-container",
-                    "resources": {
-                        "limits": {
-                            "cpu": resources["cpu"],
-                            "memory": resources["memory"]
-                        },
-                        "requests": {
-                            "cpu": str(max(1, int(float(resources["cpu"]) // 2))),
-                            "memory": resources["memory"]
-                        }
-                    }
-                }],
-                "supportedModelFormats": [{
-                    "autoSelect": True,
-                    "name": f"nvidia-nim-{data['modelName']}",
-                    "version": "1"
-                }]
-            }
-        }
-
-        return inference_yaml, runtime_yaml
-    except Exception as e:
-        raise ValueError(f"Error generating NVIDIA manifest: {str(e)}")
-
 
 @app.route('/')
 def index():
@@ -457,6 +252,239 @@ def get_gpu_info():
         logging.error(f"Raw GPU info data: {gpu_info_data}")
         return jsonify([])
 
+# Add at the beginning of app.py after imports
+def str_presenter(dumper, data):
+    """Configure YAML for string formatting."""
+    if len(data.split('\n')) > 1:  # check for multiline string
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='')
+
+yaml.add_representer(str, str_presenter)
+
+def validate_manifest_data(data, required_fields):
+    """Validate manifest input data."""
+    missing_fields = [field for field in required_fields if field not in data]
+    if missing_fields:
+        raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+
+def validate_resources(resources):
+    """Validate resource requirements and ensure proper formatting."""
+    required_fields = ['cpu', 'memory', 'gpu']
+    if not all(field in resources for field in required_fields):
+        raise ValueError("Missing required resource fields. Must specify cpu, memory, and gpu.")
+
+    try:
+        # Validate CPU
+        cpu = str(resources['cpu'])
+        if not (cpu.isdigit() or (cpu.replace('.', '').isdigit() and cpu.count('.') == 1)):
+            raise ValueError("CPU must be a valid number")
+
+        # Validate Memory
+        memory = str(resources['memory'])
+        if not memory.endswith('Gi'):
+            memory = f"{memory}Gi"
+
+        # Validate GPU
+        gpu = str(resources['gpu'])
+        if not gpu.isdigit():
+            raise ValueError("GPU must be a valid integer")
+
+        return {
+            'cpu': cpu,
+            'memory': memory,
+            'nvidia.com/gpu': gpu
+        }
+    except Exception as e:
+        raise ValueError(f"Invalid resource format: {str(e)}")
+
+def generate_nvidia_manifest(data):
+    """Generate NVIDIA manifest with validated data."""
+    required_fields = ['modelName', 'containerImage', 'resources', 'storageUri']
+    validate_manifest_data(data, required_fields)
+    
+    try:
+        resources = validate_resources(data['resources'])
+        
+        # Create the resources dict that will be used for both limits and requests
+        resource_spec = {
+            "cpu": resources["cpu"],
+            "memory": resources["memory"],
+            "nvidia.com/gpu": resources["nvidia.com/gpu"]
+        }
+        
+        inference_yaml = {
+            "apiVersion": "serving.kserve.io/v1beta1",
+            "kind": "InferenceService",
+            "metadata": {
+                "annotations": {
+                    "autoscaling.knative.dev/target": "1",
+                    "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
+                    "autoscaling.knative.dev/minScale": "1",
+                    "autoscaling.knative.dev/maxScale": "1",
+                    "serving.knative.dev/scale-to-zero-grace-period": "infinite",
+                    "serving.kserve.io/enable-auth": "false",
+                    "serving.knative.dev/scaleToZeroPodRetention": "false"
+                },
+                "name": data['modelName']
+            },
+            "spec": {
+                "predictor": {
+                    "model": {
+                        "modelFormat": {
+                            "name": f"nvidia-nim-{data['modelName']}"
+                        },
+                        "resources": {
+                            "limits": dict(resource_spec),
+                            "requests": dict(resource_spec)
+                        },
+                        "runtime": f"nvidia-nim-{data['modelName']}-runtime",
+                        "storageUri": data['storageUri']
+                    }
+                }
+            }
+        }
+
+        runtime_yaml = {
+            "apiVersion": "serving.kserve.io/v1alpha1",
+            "kind": "ClusterServingRuntime",
+            "metadata": {
+                "name": f"nvidia-nim-{data['modelName']}-runtime"
+            },
+            "spec": {
+                "annotations": {
+                    "prometheus.kserve.io/path": "/metrics",
+                    "prometheus.kserve.io/port": "8000",
+                    "serving.kserve.io/enable-metric-aggregation": "true",
+                    "serving.kserve.io/enable-prometheus-scraping": "true"
+                },
+                "containers": [{
+                    "args": None,
+                    "env": [{
+                        "name": "NIM_CACHE_PATH",
+                        "value": "/mnt/models"
+                    }],
+                    "image": data['containerImage'],
+                    "name": "kserve-container",
+                    "resources": {
+                        "limits": {
+                            "cpu": resources["cpu"],
+                            "memory": resources["memory"]
+                        },
+                        "requests": {
+                            "cpu": str(max(1, int(float(resources["cpu"]) // 2))),
+                            "memory": resources["memory"]
+                        }
+                    }
+                }],
+                "supportedModelFormats": [{
+                    "autoSelect": True,
+                    "name": f"nvidia-nim-{data['modelName']}",
+                    "version": "1"
+                }]
+            }
+        }
+
+        return inference_yaml, runtime_yaml
+    except Exception as e:
+        raise ValueError(f"Error generating NVIDIA manifest: {str(e)}")
+
+def generate_vllm_manifest(data):
+    """Generate vLLM manifest with validated data."""
+    required_fields = ['modelName', 'model', 'containerImage', 'resources', 'storageUri']
+    validate_manifest_data(data, required_fields)
+    
+    try:
+        resources = validate_resources(data['resources'])
+        
+        # Create the resources dict
+        resource_spec = {
+            "cpu": resources["cpu"],
+            "memory": resources["memory"],
+            "nvidia.com/gpu": resources["nvidia.com/gpu"]
+        }
+        
+        manifest = {
+            "apiVersion": "serving.kserve.io/v1beta1",
+            "kind": "InferenceService",
+            "metadata": {
+                "name": f"vllm-{data['modelName']}",
+                "annotations": {
+                    "autoscaling.knative.dev/target": "1",
+                    "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
+                    "autoscaling.knative.dev/minScale": "1",
+                    "autoscaling.knative.dev/maxScale": "1",
+                    "serving.knative.dev/scale-to-zero-grace-period": "infinite",
+                    "serving.kserve.io/enable-auth": "false",
+                    "serving.knative.dev/scaleToZeroPodRetention": "false"
+                }
+            },
+            "spec": {
+                "predictor": {
+                    "containers": [{
+                        "name": "kserve-container",
+                        "args": [
+                            "--port", "8080",
+                            "--model", data['model']
+                        ],
+                        "command": [
+                            "python3",
+                            "-m",
+                            "vllm.entrypoints.api_server"
+                        ],
+                        "env": [
+                            {"name": "HF_HOME", "value": "/mnt/models"},
+                            {"name": "HF_HUB_CACHE", "value": "/mnt/models/hub"},
+                            {"name": "XDG_CACHE_HOME", "value": "/mnt/models/.cache"},
+                            {"name": "XDG_CONFIG_HOME", "value": "/mnt/models/.config"},
+                            {"name": "PROTOCOL", "value": "v2"},
+                            {"name": "SCALE_TO_ZERO_ENABLED", "value": "false"}
+                        ],
+                        "image": data['containerImage'],
+                        "imagePullPolicy": "IfNotPresent",
+                        "ports": [{
+                            "containerPort": 8080,
+                            "protocol": "TCP"
+                        }],
+                        "readinessProbe": {
+                            "httpGet": {
+                                "path": "/health",
+                                "port": 8080
+                            },
+                            "initialDelaySeconds": 60,
+                            "periodSeconds": 10,
+                            "timeoutSeconds": 5
+                        },
+                        "livenessProbe": {
+                            "httpGet": {
+                                "path": "/health",
+                                "port": 8080
+                            },
+                            "initialDelaySeconds": 60,
+                            "periodSeconds": 10,
+                            "timeoutSeconds": 5
+                        },
+                        "resources": {
+                            "limits": dict(resource_spec),
+                            "requests": dict(resource_spec)
+                        },
+                        "volumeMounts": [{
+                            "name": "model-pvc",
+                            "mountPath": "/mnt/models"
+                        }]
+                    }],
+                    "volumes": [{
+                        "name": "model-pvc",
+                        "persistentVolumeClaim": {
+                            "claimName": data['storageUri']
+                        }
+                    }]
+                }
+            }
+        }
+        return manifest
+    except Exception as e:
+        raise ValueError(f"Error generating vLLM manifest: {str(e)}")
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
     global deployment_in_progress
@@ -487,11 +515,13 @@ def deploy_model():
         
         inference_yaml, runtime_yaml = generate_nvidia_manifest(data)
         
-        # Save YAML files
+        # Save YAML files with proper formatting
         with open('inference.yaml', 'w') as f:
-            yaml.dump(inference_yaml, f)
+            yaml.dump(inference_yaml, f, default_flow_style=False, sort_keys=False, 
+                     allow_unicode=True, width=float("inf"))
         with open('runtime.yaml', 'w') as f:
-            yaml.dump(runtime_yaml, f)
+            yaml.dump(runtime_yaml, f, default_flow_style=False, sort_keys=False, 
+                     allow_unicode=True, width=float("inf"))
 
         # Apply runtime YAML
         socketio.emit('deployment_status', {
@@ -544,8 +574,6 @@ def deploy_model():
         })
         deployment_in_progress = False
         return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
-    finally:
-        deployment_in_progress = False
 
 @app.route('/api/deploy-vllm', methods=['POST'])
 def deploy_vllm():
@@ -575,38 +603,13 @@ def deploy_vllm():
             'message': "Starting vLLM deployment process..."
         })
 
-        # If this is a custom model (not already downloaded)
-        if 'customModel' in data:
-            socketio.emit('deployment_status', {
-                'status': 'info',
-                'message': f"Downloading model {data['model']} from HuggingFace..."
-            })
-            try:
-                result = snapshot_download(
-                    repo_id=data['model'],
-                    cache_dir="/mnt/models/hub",
-                    local_files_only=False,
-                    allow_patterns=["*.safetensors", "*.json"]
-                )
-                socketio.emit('deployment_status', {
-                    'status': 'info',
-                    'message': f"Model downloaded successfully to {result}"
-                })
-            except Exception as e:
-                socketio.emit('deployment_status', {
-                    'status': 'error',
-                    'message': f"Failed to download model: {str(e)}",
-                    'final': True
-                })
-                deployment_in_progress = False
-                return jsonify({'status': 'error', 'message': 'Model download failed'})
-
         # Generate and apply vLLM manifest
         manifest = generate_vllm_manifest(data)
         
-        # Save manifest
+        # Save manifest with proper formatting
         with open('vllm.yaml', 'w') as f:
-            yaml.dump(manifest, f)
+            yaml.dump(manifest, f, default_flow_style=False, sort_keys=False, 
+                     allow_unicode=True, width=float("inf"))
 
         # Apply manifest
         socketio.emit('deployment_status', {
@@ -644,6 +647,7 @@ def deploy_vllm():
         })
         deployment_in_progress = False
         return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
+
 
 @app.route('/api/pod-logs/<namespace>/<pod_name>')
 def get_pod_logs(namespace, pod_name):
