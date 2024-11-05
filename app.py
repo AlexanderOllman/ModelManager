@@ -11,6 +11,8 @@ from huggingface_hub import snapshot_download, logging as hf_logging, HfApi
 import sys
 import contextlib
 import io
+import shutil
+from pathlib import Path
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -51,6 +53,7 @@ def run_kubectl_command(command):
     result = subprocess.run(command, capture_output=True, text=True, shell=True)
     return result.stdout, result.stderr
 
+
 def check_runtime_exists(runtime_name):
     _, error = run_kubectl_command(f"kubectl get clusterservingruntime {runtime_name}")
     return "NotFound" not in error
@@ -81,6 +84,7 @@ def ensure_model_directory():
     except Exception as e:
         logger.error(f"Error ensuring models directory exists: {e}")
         return False
+
 
 def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
     global deployment_in_progress
@@ -137,11 +141,9 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
                         })
                         deployment_in_progress = False
                         return True
-            else:
-                logging.error(f"Pod not yet running.")
 
         attempt += 1
-        time.sleep(10)  # Now waits 10 seconds between checks
+        time.sleep(10)  # Wait 10 seconds between checks
 
     socketio.emit('deployment_status', {
         'status': 'error',
@@ -150,7 +152,6 @@ def check_deployment_status(namespace, model_name, framework='nvidia-nim'):
     })
     deployment_in_progress = False
     return False
-
 
 @app.route('/')
 def index():
@@ -252,13 +253,29 @@ def get_gpu_info():
         logging.error(f"Raw GPU info data: {gpu_info_data}")
         return jsonify([])
 
-# Add at the beginning of app.py after imports
 def str_presenter(dumper, data):
-    """Configure YAML for string formatting."""
-    if len(data.split('\n')) > 1:  # check for multiline string
-        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
-    return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='')
+    """Configure YAML string formatting with proper quotes."""
+    if isinstance(data, str):
+        # Force quotes for certain values that need to be strings
+        if data.lower() in ('true', 'false', 'yes', 'no', 'on', 'off'):
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='"')
+        if data.isdigit() or data.replace('.', '', 1).isdigit():
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='"')
+        if data in ('infinite', 'null', 'none'):
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='"')
+        # Handle multiline strings
+        if '\n' in data:
+            return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='|')
+        # Default string handling
+        return dumper.represent_scalar('tag:yaml.org,2002:str', data, style='"')
 
+class QuotedStringDumper(yaml.SafeDumper):
+    def represent_scalar(self, tag, value, style=None):
+        if tag == 'tag:yaml.org,2002:str':
+            style = '"'
+        return super().represent_scalar(tag, value, style=style)
+
+# Register the string presenter
 yaml.add_representer(str, str_presenter)
 
 def validate_manifest_data(data, required_fields):
@@ -290,27 +307,147 @@ def validate_resources(resources):
             raise ValueError("GPU must be a valid integer")
 
         return {
-            'cpu': cpu,
-            'memory': memory,
-            'nvidia.com/gpu': gpu
+            'cpu': f"\"{cpu}\"",
+            'memory': f"\"{memory}\"",
+            'nvidia.com/gpu': f"\"{gpu}\""
         }
     except Exception as e:
         raise ValueError(f"Invalid resource format: {str(e)}")
 
-def generate_nvidia_manifest(data):
-    """Generate NVIDIA manifest with validated data."""
-    required_fields = ['modelName', 'containerImage', 'resources', 'storageUri']
+def generate_vllm_manifest(data):
+    """Generate vLLM manifest with validated data and correct string formatting."""
+    required_fields = ['modelName', 'model', 'containerImage', 'resources', 'storageUri']
     validate_manifest_data(data, required_fields)
     
     try:
         resources = validate_resources(data['resources'])
         
-        # Create the resources dict that will be used for both limits and requests
-        resource_spec = {
-            "cpu": resources["cpu"],
-            "memory": resources["memory"],
-            "nvidia.com/gpu": resources["nvidia.com/gpu"]
+        manifest = {
+            "apiVersion": "serving.kserve.io/v1beta1",
+            "kind": "InferenceService",
+            "metadata": {
+                "name": f"vllm-{data['modelName']}",
+                "annotations": {
+                    "autoscaling.knative.dev/target": "1",
+                    "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
+                    "autoscaling.knative.dev/minScale": "1",
+                    "autoscaling.knative.dev/maxScale": "1",
+                    "serving.knative.dev/scale-to-zero-grace-period": "infinite",
+                    "serving.kserve.io/enable-auth": "false",
+                    "serving.knative.dev/scaleToZeroPodRetention": "false"
+                }
+            },
+            "spec": {
+                "predictor": {
+                    "containers": [
+                        {
+                            "name": "kserve-container",
+                            "args": [
+                                "--port",
+                                "8080",
+                                "--model",
+                                data['model']
+                            ],
+                            "command": [
+                                "python3",
+                                "-m",
+                                "vllm.entrypoints.api_server"
+                            ],
+                            "env": [
+                                {
+                                    "name": "HF_HOME",
+                                    "value": "/mnt/models-pvc"
+                                },
+                                {
+                                    "name": "HF_HUB_CACHE",
+                                    "value": "/mnt/models-pvc/hub"
+                                },
+                                {
+                                    "name": "XDG_CACHE_HOME",
+                                    "value": "/mnt/models-pvc/.cache"
+                                },
+                                {
+                                    "name": "XDG_CONFIG_HOME",
+                                    "value": "/mnt/models-pvc/.config"
+                                },
+                                {
+                                    "name": "PROTOCOL",
+                                    "value": "v2"
+                                },
+                                {
+                                    "name": "SCALE_TO_ZERO_ENABLED",
+                                    "value": "false"
+                                }
+                            ],
+                            "image": data['containerImage'],
+                            "imagePullPolicy": "IfNotPresent",
+                            "ports": [
+                                {
+                                    "containerPort": 8080,
+                                    "protocol": "TCP"
+                                }
+                            ],
+                            "readinessProbe": {
+                                "httpGet": {
+                                    "path": "/health",
+                                    "port": 8080
+                                },
+                                "initialDelaySeconds": 60,
+                                "periodSeconds": 10,
+                                "timeoutSeconds": 5
+                            },
+                            "livenessProbe": {
+                                "httpGet": {
+                                    "path": "/health",
+                                    "port": 8080
+                                },
+                                "initialDelaySeconds": 60,
+                                "periodSeconds": 10,
+                                "timeoutSeconds": 5
+                            },
+                            "resources": {
+                                "limits": {
+                                    "cpu": resources["cpu"],
+                                    "memory": resources["memory"],
+                                    "nvidia.com/gpu": resources["nvidia.com/gpu"]
+                                },
+                                "requests": {
+                                    "cpu": f"\"{str(max(1, int(float(resources['cpu'].strip('\"')) // 2)))}\"",
+                                    "memory": resources["memory"],
+                                    "nvidia.com/gpu": resources["nvidia.com/gpu"]
+                                }
+                            },
+                            "volumeMounts": [
+                                {
+                                    "name": "model-pvc",
+                                    "mountPath": "/mnt/models-pvc"
+                                }
+                            ]
+                        }
+                    ],
+                    "volumes": [
+                        {
+                            "name": "model-pvc",
+                            "persistentVolumeClaim": {
+                                "claimName": data['storageUri']
+                            }
+                        }
+                    ]
+                }
+            }
         }
+        return manifest
+
+    except Exception as e:
+        raise ValueError(f"Error generating vLLM manifest: {str(e)}")
+
+def generate_nvidia_manifest(data):
+    """Generate NVIDIA manifest with validated data and correct string formatting."""
+    required_fields = ['modelName', 'containerImage', 'resources', 'storageUri']
+    validate_manifest_data(data, required_fields)
+    
+    try:
+        resources = validate_resources(data['resources'])
         
         inference_yaml = {
             "apiVersion": "serving.kserve.io/v1beta1",
@@ -334,8 +471,16 @@ def generate_nvidia_manifest(data):
                             "name": f"nvidia-nim-{data['modelName']}"
                         },
                         "resources": {
-                            "limits": dict(resource_spec),
-                            "requests": dict(resource_spec)
+                            "limits": {
+                                "cpu": resources["cpu"],
+                                "memory": resources["memory"],
+                                "nvidia.com/gpu": resources["nvidia.com/gpu"]
+                            },
+                            "requests": {
+                                "cpu": f"\"{str(max(1, int(float(resources['cpu'].strip('\"')) // 2)))}\"",
+                                "memory": resources["memory"],
+                                "nvidia.com/gpu": resources["nvidia.com/gpu"]
+                            }
                         },
                         "runtime": f"nvidia-nim-{data['modelName']}-runtime",
                         "storageUri": data['storageUri']
@@ -357,30 +502,36 @@ def generate_nvidia_manifest(data):
                     "serving.kserve.io/enable-metric-aggregation": "true",
                     "serving.kserve.io/enable-prometheus-scraping": "true"
                 },
-                "containers": [{
-                    "args": None,
-                    "env": [{
-                        "name": "NIM_CACHE_PATH",
-                        "value": "/mnt/models"
-                    }],
-                    "image": data['containerImage'],
-                    "name": "kserve-container",
-                    "resources": {
-                        "limits": {
-                            "cpu": resources["cpu"],
-                            "memory": resources["memory"]
-                        },
-                        "requests": {
-                            "cpu": str(max(1, int(float(resources["cpu"]) // 2))),
-                            "memory": resources["memory"]
+                "containers": [
+                    {
+                        "args": None,
+                        "env": [
+                            {
+                                "name": "NIM_CACHE_PATH",
+                                "value": "/mnt/models-pvc"
+                            }
+                        ],
+                        "image": data['containerImage'],
+                        "name": "kserve-container",
+                        "resources": {
+                            "limits": {
+                                "cpu": resources["cpu"],
+                                "memory": resources["memory"]
+                            },
+                            "requests": {
+                                "cpu": f"\"{str(max(1, int(float(resources['cpu'].strip('\"')) // 2)))}\"",
+                                "memory": resources["memory"]
+                            }
                         }
                     }
-                }],
-                "supportedModelFormats": [{
-                    "autoSelect": True,
-                    "name": f"nvidia-nim-{data['modelName']}",
-                    "version": "1"
-                }]
+                ],
+                "supportedModelFormats": [
+                    {
+                        "autoSelect": True,
+                        "name": f"nvidia-nim-{data['modelName']}",
+                        "version": "1"
+                    }
+                ]
             }
         }
 
@@ -388,102 +539,86 @@ def generate_nvidia_manifest(data):
     except Exception as e:
         raise ValueError(f"Error generating NVIDIA manifest: {str(e)}")
 
-def generate_vllm_manifest(data):
-    """Generate vLLM manifest with validated data."""
-    required_fields = ['modelName', 'model', 'containerImage', 'resources', 'storageUri']
-    validate_manifest_data(data, required_fields)
+# Update the deployment routes to use the new YAML dumper
+@app.route('/api/deploy-vllm', methods=['POST'])
+def deploy_vllm():
+    global deployment_in_progress
+    
+    if deployment_in_progress:
+        return jsonify({
+            'status': 'error',
+            'message': 'A deployment is already in progress. Please wait.'
+        })
+    
+    with deployment_lock:
+        if deployment_in_progress:
+            return jsonify({
+                'status': 'error',
+                'message': 'A deployment is already in progress. Please wait.'
+            })
+        deployment_in_progress = True
     
     try:
-        resources = validate_resources(data['resources'])
+        data = request.json
+        namespace = data['namespace']
+        model_name = data['modelName']
+
+        socketio.emit('deployment_status', {
+            'status': 'info',
+            'message': "Starting vLLM deployment process..."
+        })
+
+        # Generate and apply vLLM manifest
+        manifest = generate_vllm_manifest(data)
         
-        # Create the resources dict
-        resource_spec = {
-            "cpu": resources["cpu"],
-            "memory": resources["memory"],
-            "nvidia.com/gpu": resources["nvidia.com/gpu"]
-        }
+        # Save manifest with proper formatting
+        with open('vllm.yaml', 'w') as f:
+            yaml.dump(
+                manifest,
+                f,
+                Dumper=QuotedStringDumper,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+                width=float("inf")
+            )
+
+        # Apply manifest
+        socketio.emit('deployment_status', {
+            'status': 'info',
+            'message': "Deploying vLLM service..."
+        })
         
-        manifest = {
-            "apiVersion": "serving.kserve.io/v1beta1",
-            "kind": "InferenceService",
-            "metadata": {
-                "name": f"vllm-{data['modelName']}",
-                "annotations": {
-                    "autoscaling.knative.dev/target": "1",
-                    "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
-                    "autoscaling.knative.dev/minScale": "1",
-                    "autoscaling.knative.dev/maxScale": "1",
-                    "serving.knative.dev/scale-to-zero-grace-period": "infinite",
-                    "serving.kserve.io/enable-auth": "false",
-                    "serving.knative.dev/scaleToZeroPodRetention": "false"
-                }
-            },
-            "spec": {
-                "predictor": {
-                    "containers": [{
-                        "name": "kserve-container",
-                        "args": [
-                            "--port", "8080",
-                            "--model", data['model']
-                        ],
-                        "command": [
-                            "python3",
-                            "-m",
-                            "vllm.entrypoints.api_server"
-                        ],
-                        "env": [
-                            {"name": "HF_HOME", "value": "/mnt/models"},
-                            {"name": "HF_HUB_CACHE", "value": "/mnt/models/hub"},
-                            {"name": "XDG_CACHE_HOME", "value": "/mnt/models/.cache"},
-                            {"name": "XDG_CONFIG_HOME", "value": "/mnt/models/.config"},
-                            {"name": "PROTOCOL", "value": "v2"},
-                            {"name": "SCALE_TO_ZERO_ENABLED", "value": "false"}
-                        ],
-                        "image": data['containerImage'],
-                        "imagePullPolicy": "IfNotPresent",
-                        "ports": [{
-                            "containerPort": 8080,
-                            "protocol": "TCP"
-                        }],
-                        "readinessProbe": {
-                            "httpGet": {
-                                "path": "/health",
-                                "port": 8080
-                            },
-                            "initialDelaySeconds": 60,
-                            "periodSeconds": 10,
-                            "timeoutSeconds": 5
-                        },
-                        "livenessProbe": {
-                            "httpGet": {
-                                "path": "/health",
-                                "port": 8080
-                            },
-                            "initialDelaySeconds": 60,
-                            "periodSeconds": 10,
-                            "timeoutSeconds": 5
-                        },
-                        "resources": {
-                            "limits": dict(resource_spec),
-                            "requests": dict(resource_spec)
-                        },
-                        "volumeMounts": [{
-                            "name": "model-pvc",
-                            "mountPath": "/mnt/models"
-                        }]
-                    }],
-                    "volumes": [{
-                        "name": "model-pvc",
-                        "persistentVolumeClaim": {
-                            "claimName": data['storageUri']
-                        }
-                    }]
-                }
-            }
-        }
-        return manifest
+        result, error = run_kubectl_command(f"kubectl apply -f vllm.yaml -n {namespace}")
+        if error:
+            socketio.emit('deployment_status', {
+                'status': 'error',
+                'message': f"Failed to deploy vLLM service: {error}",
+                'final': True
+            })
+            deployment_in_progress = False
+            return jsonify({'status': 'error', 'message': 'vLLM service deployment failed'})
+
+        # Start status checking in a separate thread
+        threading.Thread(
+            target=lambda: check_deployment_status(
+                namespace, 
+                f"vllm-{model_name}", 
+                framework='vllm'
+            )
+        ).start()
+
+        return jsonify({'status': 'info', 'message': 'Deployment started. Checking status...'})
+
     except Exception as e:
-        raise ValueError(f"Error generating vLLM manifest: {str(e)}")
+        logger.error(f"Error in vLLM deployment: {str(e)}")
+        socketio.emit('deployment_status', {
+            'status': 'error',
+            'message': f"Deployment error: {str(e)}",
+            'final': True
+        })
+        deployment_in_progress = False
+        return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
 
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
@@ -517,13 +652,29 @@ def deploy_model():
         
         # Save YAML files with proper formatting
         with open('inference.yaml', 'w') as f:
-            yaml.dump(inference_yaml, f, default_flow_style=False, sort_keys=False, 
-                     allow_unicode=True, width=float("inf"))
+            yaml.dump(
+                inference_yaml,
+                f,
+                Dumper=QuotedStringDumper,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+                width=float("inf")
+            )
+            
         with open('runtime.yaml', 'w') as f:
-            yaml.dump(runtime_yaml, f, default_flow_style=False, sort_keys=False, 
-                     allow_unicode=True, width=float("inf"))
+            yaml.dump(
+                runtime_yaml,
+                f,
+                Dumper=QuotedStringDumper,
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+                width=float("inf")
+            )
 
         # Apply runtime YAML
+            # Apply runtime YAML
         socketio.emit('deployment_status', {
             'status': 'info',
             'message': "Deploying runtime..."
@@ -574,80 +725,7 @@ def deploy_model():
         })
         deployment_in_progress = False
         return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
-
-@app.route('/api/deploy-vllm', methods=['POST'])
-def deploy_vllm():
-    global deployment_in_progress
     
-    if deployment_in_progress:
-        return jsonify({
-            'status': 'error',
-            'message': 'A deployment is already in progress. Please wait.'
-        })
-    
-    with deployment_lock:
-        if deployment_in_progress:
-            return jsonify({
-                'status': 'error',
-                'message': 'A deployment is already in progress. Please wait.'
-            })
-        deployment_in_progress = True
-    
-    try:
-        data = request.json
-        namespace = data['namespace']
-        model_name = data['modelName']
-
-        socketio.emit('deployment_status', {
-            'status': 'info',
-            'message': "Starting vLLM deployment process..."
-        })
-
-        # Generate and apply vLLM manifest
-        manifest = generate_vllm_manifest(data)
-        
-        # Save manifest with proper formatting
-        with open('vllm.yaml', 'w') as f:
-            yaml.dump(manifest, f, default_flow_style=False, sort_keys=False, 
-                     allow_unicode=True, width=float("inf"))
-
-        # Apply manifest
-        socketio.emit('deployment_status', {
-            'status': 'info',
-            'message': "Deploying vLLM service..."
-        })
-        
-        result, error = run_kubectl_command(f"kubectl apply -f vllm.yaml -n {namespace}")
-        if error:
-            socketio.emit('deployment_status', {
-                'status': 'error',
-                'message': f"Failed to deploy vLLM service: {error}",
-                'final': True
-            })
-            deployment_in_progress = False
-            return jsonify({'status': 'error', 'message': 'vLLM service deployment failed'})
-
-        # Start status checking in a separate thread
-        threading.Thread(
-            target=lambda: check_deployment_status(
-                namespace, 
-                f"vllm-{model_name}", 
-                framework='vllm'
-            )
-        ).start()
-
-        return jsonify({'status': 'info', 'message': 'Deployment started. Checking status...'})
-
-    except Exception as e:
-        logger.error(f"Error in vLLM deployment: {str(e)}")
-        socketio.emit('deployment_status', {
-            'status': 'error',
-            'message': f"Deployment error: {str(e)}",
-            'final': True
-        })
-        deployment_in_progress = False
-        return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
-
 
 @app.route('/api/pod-logs/<namespace>/<pod_name>')
 def get_pod_logs(namespace, pod_name):
@@ -680,17 +758,6 @@ def describe_resource(resource_type, resource_name):
         
     return jsonify({'description': description})
 
-import os
-import shutil
-from flask import jsonify, request
-from pathlib import Path
-
-# Add this to your existing routes
-
-import os
-import shutil
-from flask import jsonify, request
-from pathlib import Path
 
 @app.route('/api/delete-model-files', methods=['DELETE'])
 def delete_model_files():
