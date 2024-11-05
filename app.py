@@ -399,13 +399,17 @@ def deploy_model():
         data = request.json
         namespace = data['namespace']
         model_name = data['modelName']
+
+        resources = data['resources']
+        container_image = data['containerImage']
+        storage_uri = data['storageUri']
         
         socketio.emit('deployment_status', {
             'status': 'info',
             'message': "Starting deployment process..."
         })
         
-        inference_yaml, runtime_yaml = generate_nvidia_manifest(data)
+        inference_yaml, runtime_yaml = generate_nvidia_manifest(model_name, resources, container_image, storage_uri)
         
         # Save YAML files
         with open('inference.yaml', 'w') as f:
@@ -490,6 +494,10 @@ def deploy_vllm():
         namespace = data['namespace']
         model_name = data['modelName']
 
+        resources = data['resources']
+        container_image = data['containerImage']
+        storage_uri = data['storageUri']
+
         socketio.emit('deployment_status', {
             'status': 'info',
             'message': "Starting vLLM deployment process..."
@@ -521,8 +529,10 @@ def deploy_vllm():
                 deployment_in_progress = False
                 return jsonify({'status': 'error', 'message': 'Model download failed'})
 
+
+
         # Generate and apply vLLM manifest
-        manifest = generate_vllm_manifest(data)
+        manifest = generate_vllm_manifest(model_name, container_image, resources, storage_uri)
         
         # Save manifest
         with open('vllm.yaml', 'w') as f:
