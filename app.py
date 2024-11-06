@@ -402,7 +402,7 @@ metadata:
     serving.knative.dev/scaleToZeroPodRetention: "false"
 spec:
   predictor:
-    container:
+    containers:
       name: kserve-container
       image: {data['containerImage']}
       env:
@@ -799,6 +799,6 @@ if __name__ == '__main__':
     inference_yaml = generate_nvidia_inferenceservice_manifest(data)
     with open('inference.yaml', 'w') as f:
         f.write(inference_yaml)
-        
+
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')
     
