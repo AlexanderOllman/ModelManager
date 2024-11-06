@@ -376,8 +376,8 @@ spec:
     except Exception as e:
         raise ValueError(f"Error generating vLLM manifest: {str(e)}")
 
-def generate_nvidia_manifest(data):
-    """Generate NVIDIA manifest using string templates for correct formatting."""
+def generate_nvidia_inferenceservice_manifest(data):
+    """Generate NVIDIA InferenceService manifest using string templates for correct formatting."""
     required_fields = ['modelName', 'containerImage', 'resources', 'storageUri']
     validate_manifest_data(data, required_fields)
 
@@ -402,55 +402,31 @@ metadata:
     serving.knative.dev/scaleToZeroPodRetention: "false"
 spec:
   predictor:
-    model:
-      modelFormat:
-        name: nvidia-nim-{model_name}
+    container:
+      name: kserve-container
+      image: {data['containerImage']}
+      env:
+        - name: NIM_CACHE_PATH
+          value: /mnt/models-pvc
       resources:
         limits:
           cpu: "{resources['cpu']}"
-          memory: {resources['memory']}
+          memory: "{resources['memory']}"
           nvidia.com/gpu: "{resources['nvidia.com/gpu']}"
         requests:
           cpu: "{request_cpu}"
-          memory: {resources['memory']}
+          memory: "{resources['memory']}"
           nvidia.com/gpu: "{resources['nvidia.com/gpu']}"
-      runtime: nvidia-nim-{model_name}-runtime
+    model:
+      modelFormat:
+        name: nvidia-nim-{model_name}
       storageUri: {data['storageUri']}
 """
 
-        # Prepare the runtime manifest template
-        runtime_yaml = f"""
-apiVersion: serving.kserve.io/v1alpha1
-kind: ClusterServingRuntime
-metadata:
-  name: nvidia-nim-{model_name}-runtime
-spec:
-  annotations:
-    prometheus.kserve.io/path: /metrics
-    prometheus.kserve.io/port: "8000"
-    serving.kserve.io/enable-metric-aggregation: "true"
-    serving.kserve.io/enable-prometheus-scraping: "true"
-  containers:
-  - env:
-    - name: NIM_CACHE_PATH
-      value: /mnt/models-pvc
-    image: {data['containerImage']}
-    name: kserve-container
-    resources:
-      limits:
-        cpu: "{resources['cpu']}"
-        memory: {resources['memory']}
-      requests:
-        cpu: "{request_cpu}"
-        memory: {resources['memory']}
-  supportedModelFormats:
-  - autoSelect: true
-    name: nvidia-nim-{model_name}
-"""
-
-        return inference_yaml.strip(), runtime_yaml.strip()
+        return inference_yaml.strip()
     except Exception as e:
-        raise ValueError(f"Error generating NVIDIA manifest: {str(e)}")
+        raise ValueError(f"Error generating NVIDIA InferenceService manifest: {str(e)}")
+
 
 
 def save_manifest_to_file(manifest, filename):
@@ -531,6 +507,7 @@ def deploy_vllm():
         deployment_in_progress = False
         return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
 
+
 @app.route('/api/deploy', methods=['POST'])
 def deploy_model():
     global deployment_in_progress
@@ -559,34 +536,11 @@ def deploy_model():
             'message': "Starting deployment process..."
         })
         
-        inference_yaml, runtime_yaml = generate_nvidia_manifest(data)
+        inference_yaml = generate_nvidia_inferenceservice_manifest(data)
         
         with open('inference.yaml', 'w') as f:
             f.write(inference_yaml)
-
-        with open('runtime.yaml', 'w') as f:
-            f.write(runtime_yaml)
-
-
-        # Apply runtime YAML
-            # Apply runtime YAML
-        socketio.emit('deployment_status', {
-            'status': 'info',
-            'message': "Deploying runtime..."
-        })
-        runtime_result, runtime_error = run_kubectl_command(f"kubectl apply -f runtime.yaml")
-        if runtime_error:
-            socketio.emit('deployment_status', {
-                'status': 'error',
-                'message': f"Failed to deploy runtime: {runtime_error}",
-                'final': True
-            })
-            deployment_in_progress = False
-            return jsonify({'status': 'error', 'message': 'Runtime deployment failed.'})
-
-        # Wait for runtime to be ready
-        time.sleep(15)
-
+        
         # Apply inference YAML
         socketio.emit('deployment_status', {
             'status': 'info',
@@ -603,7 +557,7 @@ def deploy_model():
             })
             deployment_in_progress = False
             return jsonify({'status': 'error', 'message': 'Inference service deployment failed.'})
-
+        
         # Start status checking in a separate thread
         threading.Thread(
             target=lambda: check_deployment_status(namespace, model_name)
@@ -620,7 +574,8 @@ def deploy_model():
         })
         deployment_in_progress = False
         return jsonify({'status': 'error', 'message': f'Deployment error: {str(e)}'})
-    
+    finally:
+        deployment_in_progress = False
 
 @app.route('/api/pod-logs/<namespace>/<pod_name>')
 def get_pod_logs(namespace, pod_name):
@@ -841,5 +796,9 @@ if __name__ == '__main__':
     with open('vllm.yaml', 'w') as f:
         f.write(vllm_manifest)
 
+    inference_yaml = generate_nvidia_inferenceservice_manifest(data)
+    with open('inference.yaml', 'w') as f:
+        f.write(inference_yaml)
+        
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')
     
