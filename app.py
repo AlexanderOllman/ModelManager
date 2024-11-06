@@ -311,7 +311,7 @@ metadata:
     serving.knative.dev/scaleToZeroPodRetention: "false"
 spec:
   predictor:
-    container:
+    containers:
       - name: "kserve-container"
         args:
           - "--port"
