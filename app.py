@@ -425,9 +425,6 @@ spec:
           mountPath: "/mnt/models-pvc"
         - name: dshm
           mountPath: /dev/shm
-    protocolVersions:
-      - v2
-      - grpc-v2
     volumes:
       - name: "model-pvc"
         persistentVolumeClaim:
