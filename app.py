@@ -321,7 +321,7 @@ spec:
         command:
           - "python3"
           - "-m"
-          - "vllm.entrypoints.api_server"
+          - "vllm serve"
         env:
           - name: "HF_HOME"
             value: "/mnt/models-pvc"
