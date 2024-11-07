@@ -750,12 +750,12 @@ function calculateResources() {
     const quantization = quantizationSelect ? parseInt(quantizationSelect.value) : 16;
 
     const cpuLimit = Math.max(2, Math.ceil(modelSize / 2));
-    const memoryLimit = Math.max(4, Math.ceil(modelSize * 2));
+    const memoryLimit = Math.max(8, Math.ceil(modelSize * 2));
     const gpuMemoryNeededMB = ((modelSize * 1e9 * 4) / (32 / quantization) * 1.2) / 1e6;
 
     const cpuInput = document.getElementById('cpuLimit');
     const memoryInput = document.getElementById('memoryLimit');
-    
+
     if (cpuInput) cpuInput.value = cpuLimit;
     if (memoryInput) memoryInput.value = memoryLimit;
 
