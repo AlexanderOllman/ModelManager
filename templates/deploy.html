@@ -551,7 +551,9 @@ function saveNewModel(e) {
                 modelName: document.getElementById('modelName')?.value,
                 namespace: document.getElementById('namespace')?.value,
                 containerImage: document.getElementById('containerImage')?.value,
-                storageUri: document.getElementById('storageUri')?.value,
+                storageUri: customModel ? 
+                    document.getElementById('vllmStorageUri')?.value?.replace('pvc://', '') || 'models-pvc' : 
+                    'models-pvc',
                 resources: {
                     cpu: document.getElementById('cpuLimit')?.value,
                     memory: `${document.getElementById('memoryLimit')?.value}Gi`,
