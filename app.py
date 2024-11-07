@@ -408,6 +408,9 @@ spec:
       env:
         - name: NIM_CACHE_PATH
           value: /mnt/models-pvc
+      ports:
+        - containerPort: 8000
+          protocol: TCP
       resources:
         limits:
           cpu: "{resources['cpu']}"
@@ -420,10 +423,19 @@ spec:
       volumeMounts:
         - name: "model-pvc"
           mountPath: "/mnt/models-pvc"
+        - name: dshm
+          mountPath: /dev/shm
+    protocolVersions:
+      - v2
+      - grpc-v2
     volumes:
       - name: "model-pvc"
         persistentVolumeClaim:
           claimName: "{data['storageUri']}"
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "{resources['memory']}"
 """
 
         return inference_yaml.strip()
