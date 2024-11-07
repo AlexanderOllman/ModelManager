@@ -418,7 +418,7 @@ spec:
           memory: "{resources['memory']}"
           nvidia.com/gpu: "{resources['nvidia.com/gpu']}"
     volumeMounts:
-        - name: "model-pvc"
+      - name: "model-pvc"
         mountPath: "/mnt/models-pvc"
     volumes:
       - name: "model-pvc"
