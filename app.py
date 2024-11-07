@@ -403,7 +403,7 @@ metadata:
 spec:
   predictor:
     containers:
-      name: kserve-container
+    - name: kserve-container
       image: {data['containerImage']}
       env:
         - name: NIM_CACHE_PATH
@@ -417,10 +417,13 @@ spec:
           cpu: "{request_cpu}"
           memory: "{resources['memory']}"
           nvidia.com/gpu: "{resources['nvidia.com/gpu']}"
-    model:
-      modelFormat:
-        name: nvidia-nim-{model_name}
-      storageUri: {data['storageUri']}
+        volumeMounts:
+          - name: "model-pvc"
+            mountPath: "/mnt/models-pvc"
+    volumes:
+      - name: "model-pvc"
+        persistentVolumeClaim:
+          claimName: "{data['storageUri']}"
 """
 
         return inference_yaml.strip()
