@@ -1,24 +1,18 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- Add this at the top of the page content, right after the opening main tag -->
 <div id="copySuccessModal" class="copy-success-modal" style="display: none;">
     <span id="copySuccessMessage"></span>
 </div>
 <h2 class="mt-4">Models</h2>
 <div class="mb-3 d-flex justify-content-between align-items-center">
     <input type="text" id="modelSearch" class="form-control w-75" placeholder="Search by name or namespace">
-    <button id="addModelBtn" class="btn btn-primary">Add Model</button>
+    <a href="/deploy" class="btn btn-primary">Deploy Model</a>
 </div>
 <div id="models-container">
     <div class="spinner-border" role="status">
         <span class="visually-hidden">Loading...</span>
     </div>
-</div>
-
-<!-- Success Modal -->
-<div id="copySuccessModal" class="copy-success-modal" style="display: none;">
-    <span id="copySuccessMessage"></span>
 </div>
 
 <!-- Delete Confirmation Modal -->
@@ -155,7 +149,6 @@ function getFrameworkLabel(type) {
     }
 }
 
-
 function createModelCards(data) {
     const container = document.getElementById('models-container');
     container.innerHTML = '';
@@ -178,9 +171,14 @@ function createModelCards(data) {
         card.dataset.url = url;
         
         card.innerHTML = `
-            <button class="delete-btn" aria-label="Delete model">
-                <i class="fas fa-times"></i>
-            </button>
+            <div class="dropdown">
+                <button class="btn btn-link dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
+                    <li><a class="dropdown-item text-danger" href="#" onclick="confirmDelete('${modelName}')">Delete</a></li>
+                </ul>
+            </div>
             
             <div class="status-badge ${isReady ? 'ready' : 'not-ready'}">
                 ${isReady ? 'Ready' : 'Not Ready'}
@@ -239,6 +237,16 @@ function filterModels() {
     });
 }
 
+function confirmDelete(modelName) {
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    document.getElementById('confirmDelete').onclick = function() {
+        // Add your delete logic here
+        console.log(`Deleting model: ${modelName}`);
+        deleteModal.hide();
+    };
+    deleteModal.show();
+}
+
 // Add stylesheet
 const styleSheet = document.createElement('style');
 styleSheet.textContent = `
@@ -257,7 +265,7 @@ document.getElementById('modelSearch').addEventListener('input', filterModels);
 
 document.addEventListener('click', function(e) {
     const modelCard = e.target.closest('.model-card');
-    if (!modelCard) return;
+    if (!modelCard || e.target.closest('.dropdown')) return;
     
     const url = modelCard.dataset.url;
     const modelName = modelCard.querySelector('.model-name').textContent.trim();
@@ -278,7 +286,6 @@ fetch('/api/isvc')
         document.getElementById('models-container').innerHTML = 
             '<p>Error loading models. Please try again later.</p>';
     });
-
 
 </script>
 {% endblock %}
