@@ -5,3 +5,4 @@ flask-socketio
 eventlet
 huggingface_hub
 PyYAML
+boto3

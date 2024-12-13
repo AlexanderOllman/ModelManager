@@ -13,6 +13,9 @@ import contextlib
 import io
 import shutil
 from pathlib import Path
+from werkzeug.utils import secure_filename
+import boto3
+from botocore.exceptions import ClientError
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -797,23 +800,50 @@ def download_model():
 def pipelines():
     return render_template('pipelines.html')
 
+@app.route('/api/upload-files', methods=['POST'])
+def upload_files():
+    if 'files[]' not in request.files:
+        return jsonify({'error': 'No files provided'}), 400
+    
+    files = request.files.getlist('files[]')
+    uploaded_files = []
+    
+    for file in files:
+        if file and file.filename:
+            filename = secure_filename(file.filename)
+            if filename.lower().endswith(('.pdf', '.docx')):
+                uploaded_files.append(filename)
+                # Here you would typically save the file or process it
+                # For now, we're just collecting names
+    
+    return jsonify({'files': uploaded_files})
+
+@app.route('/api/connect-s3', methods=['POST'])
+def connect_s3():
+    try:
+        data = request.json
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=data['accessKeyId'],
+            aws_secret_access_key=data['secretAccessKey'],
+            endpoint_url=data['endpointUrl'],
+            verify=False
+        )
+        
+        # Test connection by listing buckets
+        response = s3_client.list_buckets()
+        buckets = [bucket['Name'] for bucket in response['Buckets']]
+        
+        return jsonify({
+            'success': True,
+            'buckets': buckets
+        })
+    except ClientError as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 400
+
 if __name__ == '__main__':
-# Example usage
-    data = {
-        'modelName': 'facebook-opt-125m',
-        'model': 'facebook/opt-125m',
-        'containerImage': 'vllm/vllm-openai:latest',
-        'resources': {'cpu': 4, 'memory': '8Gi', 'gpu': 1},
-        'storageUri': 'models-pvc'
-    }
-
-    vllm_manifest = generate_vllm_manifest(data)
-    with open('vllm.yaml', 'w') as f:
-        f.write(vllm_manifest)
-
-    inference_yaml = generate_nvidia_inferenceservice_manifest(data)
-    with open('inference.yaml', 'w') as f:
-        f.write(inference_yaml)
-
     socketio.run(app, debug=True, host='0.0.0.0', port='8080')
     
