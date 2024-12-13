@@ -793,6 +793,9 @@ def download_model():
 
     return Response(generate(), mimetype='text/event-stream')
 
+@app.route('/pipelines')
+def pipelines():
+    return render_template('pipelines.html')
 
 if __name__ == '__main__':
 # Example usage

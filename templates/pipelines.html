@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="copySuccessModal" class="copy-success-modal" style="display: none;">
+    <span id="copySuccessMessage"></span>
+</div>
+
+<h2 class="mt-4">Pipelines</h2>
+<div class="mb-3 d-flex justify-content-between align-items-center">
+    <input type="text" id="pipelineSearch" class="form-control w-75" placeholder="Search pipelines">
+    <button id="addPipelineBtn" class="btn btn-primary">New Pipeline</button>
+</div>
+
+<div id="pipelines-container">
+    <!-- Pipeline cards will be inserted here -->
+</div>
+
+<!-- Pipeline Form Modal -->
+<div id="pipeline-form" class="mt-4" style="display: none;">
+    <h3>New Pipeline</h3>
+    <form id="newPipelineForm">
+        <div class="pipeline-form-container">
+            <!-- Column 1 -->
+            <div class="pipeline-column">
+                <h4>Column 1</h4>
+                <div class="column-content">
+                    <!-- Content for Column 1 will be added here -->
+                </div>
+            </div>
+
+            <!-- Column 2 -->
+            <div class="pipeline-column">
+                <h4>Column 2</h4>
+                <div class="column-content">
+                    <!-- Content for Column 2 will be added here -->
+                </div>
+            </div>
+
+            <!-- Column 3 -->
+            <div class="pipeline-column">
+                <h4>Column 3</h4>
+                <div class="column-content">
+                    <!-- Content for Column 3 will be added here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Actions -->
+        <div class="form-actions mt-4">
+            <button type="button" id="cancelPipeline" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Save Pipeline</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Helper Functions
+function createPipelineCards(data) {
+    const container = document.getElementById('pipelines-container');
+    container.innerHTML = '';
+    
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p>No pipelines found.</p>';
+        return;
+    }
+
+    data.forEach(pipeline => {
+        const card = document.createElement('div');
+        card.className = 'pipeline-card';
+        card.innerHTML = `
+            <div class="status-badge ${pipeline.status === 'active' ? 'ready' : 'not-ready'}">
+                ${pipeline.status}
+            </div>
+            
+            <div class="deployment-date">
+                Created ${new Date(pipeline.createdAt).toLocaleString()}
+            </div>
+            
+            <div class="pipeline-name">
+                ${pipeline.name}
+            </div>
+            
+            <div class="pipeline-description">
+                ${pipeline.description || 'No description'}
+            </div>
+            
+            <div class="pipeline-stats">
+                <span class="stat-item">Steps: ${pipeline.steps}</span>
+                <div class="divider"></div>
+                <span class="stat-item">Models: ${pipeline.models}</span>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+}
+
+// Event Handlers
+function showPipelineForm() {
+    document.getElementById('pipelines-container').style.display = 'none';
+    document.getElementById('pipelineSearch').style.display = 'none';
+    document.getElementById('addPipelineBtn').style.display = 'none';
+    document.getElementById('pipeline-form').style.display = 'block';
+}
+
+function hidePipelineForm() {
+    document.getElementById('pipelines-container').style.display = 'grid';
+    document.getElementById('pipelineSearch').style.display = 'block';
+    document.getElementById('addPipelineBtn').style.display = 'block';
+    document.getElementById('pipeline-form').style.display = 'none';
+    document.getElementById('newPipelineForm').reset();
+}
+
+function filterPipelines() {
+    const searchTerm = document.getElementById('pipelineSearch').value.toLowerCase();
+    document.querySelectorAll('.pipeline-card').forEach(card => {
+        const name = card.querySelector('.pipeline-name').textContent.toLowerCase();
+        const description = card.querySelector('.pipeline-description').textContent.toLowerCase();
+        if (name.includes(searchTerm) || description.includes(searchTerm)) {
+            card.style.display = '';
+        } else {
+            card.style.display = 'none';
+        }
+    });
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners
+    document.getElementById('pipelineSearch').addEventListener('input', filterPipelines);
+    document.getElementById('addPipelineBtn').addEventListener('click', showPipelineForm);
+    document.getElementById('cancelPipeline').addEventListener('click', hidePipelineForm);
+    
+    // Initialize with empty data for now
+    createPipelineCards([]);
+});
+
+// Add stylesheet
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+    #pipelines-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 2rem;
+        padding: 1rem;
+    }
+
+    .pipeline-card {
+        background-color: #ffffff;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        position: relative;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .pipeline-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .pipeline-form-container {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .pipeline-column {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        min-height: 400px;
+    }
+
+    .pipeline-column h4 {
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .column-content {
+        min-height: 350px;
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .pipeline-stats {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #dee2e6;
+    }
+
+    .stat-item {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    .divider {
+        width: 1px;
+        height: 20px;
+        background-color: #dee2e6;
+    }
+`;
+document.head.appendChild(styleSheet);
+</script>
+{% endblock %} 
