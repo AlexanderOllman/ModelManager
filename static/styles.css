@@ -38,7 +38,7 @@
 /* Base Layout Styles */
 body {
     padding-top: 56px;
-    background-color: #f8f9fa;
+    background-color: #E5E8EB;
 }
 
 /* Sidebar Styles */
@@ -88,7 +88,9 @@ body {
 .sidebar:hover .menu-toggle span {
     display: inline;
 }
-
+.sidebar .nav-item{
+    color: #E5E8EB !important;
+}
 .sidebar .nav-link {
     width: 100%;
     overflow: hidden;
@@ -117,6 +119,12 @@ body {
     text-align: center;
 }
 
+.sidebar .nav-link svg {
+    font-size: 1.25rem;
+    width: 24px;
+    text-align: center;
+}
+
 .main-content {
     margin-left: 60px;
     padding-top: 1rem;
@@ -139,14 +147,14 @@ body {
 }
 
 .navbar-brand img {
-    height: 24px;
+    height: 28px;
     width: auto;
 }
 
 .navbar-brand span {
     color: #3D4447;
-    font-weight: 600;
-    font-size: 1.25rem;
+    font-weight: 800;
+    font-size: 1.35rem;
 }
 
 .sidebar:hover ~ .main-content,
