@@ -362,7 +362,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Status Badge */
 .model-card .status-badge {
-    position: absolute;
+    position: relative;
     top: 1rem;
     left: -0.1rem;
     width: 75px;
@@ -400,7 +400,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Model Card Dropdown */
-.model-card .dropdown-toggle {
+.model-card .dropdown-button {
     position: absolute;
     right: 0rem;
     background: none;
