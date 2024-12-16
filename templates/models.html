@@ -172,7 +172,7 @@ function createModelCards(data) {
         
         card.innerHTML = `
             <div class="dropdown">
-                <button class="btn btn-link dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                <button class="btn btn-link" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="fas fa-ellipsis-v"></i>
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton">
@@ -184,12 +184,12 @@ function createModelCards(data) {
                 ${isReady ? 'Ready' : 'Not Ready'}
             </div>
             
-            <div class="deployment-date">
-                Deployed ${formatDate(safeGet(item, 'metadata.creationTimestamp'))}
-            </div>
-            
             <div class="model-name">
                 ${modelName}
+            </div>
+
+            <div class="deployment-date">
+                Deployed ${formatDate(safeGet(item, 'metadata.creationTimestamp'))}
             </div>
             
             <div class="field-label">

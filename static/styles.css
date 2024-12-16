@@ -364,7 +364,9 @@ h1, h2, h3, h4, h5, h6 {
 .model-card .status-badge {
     position: absolute;
     top: 1rem;
-    left: 1rem;
+    left: -0.1rem;
+    width: 75px;
+    margin-bottom: 8px;
     padding: 0.5rem 1rem;
     border-radius: 6px;
     font-size: 0.875rem;
@@ -392,7 +394,7 @@ h1, h2, h3, h4, h5, h6 {
 .model-card .model-name {
     font-size: 1.5rem;
     font-weight: 600;
-    margin-bottom: 1.5rem;
+    margin-bottom: 0.3rem;
     line-height: 1.2;
     color: #111827;
 }
@@ -400,8 +402,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Model Card Dropdown */
 .model-card .dropdown-toggle {
     position: absolute;
-    top: 1rem;
-    right: 1rem;
+    right: 0rem;
     background: none;
     border: none;
     color: #6c757d;
